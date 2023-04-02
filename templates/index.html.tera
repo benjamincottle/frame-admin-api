@@ -1,8 +1,6 @@
-<html>
-    <head>
-        <title>{{ title }}</title>
-    </head>
-    <body>
-        <h1>{{ message }}</h1>
-    </body>
-</html>
+{% extends 'base.html.tera' %}
+
+{% block content %}
+    <h1 class="mt-2">{% block title %} Index {% endblock %}</h1>
+    {{ message }}
+{% endblock %}
