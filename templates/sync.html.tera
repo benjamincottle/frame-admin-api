@@ -1,0 +1,74 @@
+{% extends 'base.html.tera' %}
+
+{% block content %}
+    <h1>{% block title %} Task Status{% endblock %}</h1>
+
+{#
+<script>
+function getStatus(taskID) {
+  fetch(`/frame_admin/tasks/${taskID}`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+  })
+  .then(response => response.json())
+  .then(res => {
+    const html = `
+      <tr>
+        <td>${taskID}</td>
+        <td>${res.task_status}</td>
+        <td>${res.task_result}</td>
+      </tr>`;
+
+    if (document.getElementById(taskID)){
+        const existingRow = document.getElementById(taskID);
+        existingRow.innerHTML = html;
+    } else {
+        const newRow = document.getElementById('tasks').insertRow(0);
+        newRow.id = `${taskID}`;
+        newRow.innerHTML = html;
+    };
+
+    const taskStatus = res.task_status;
+    if (taskStatus === 'SUCCESS' || taskStatus === 'FAILURE') return false;
+    setTimeout(function() {
+      getStatus(res.task_id);
+    }, 4000);
+  })
+  .catch(err => console.log(err));
+}
+
+    window.onload = function() {
+      if (({{ task_queue|tojson }}).length == 0) {
+        const html = `
+          <tr>
+            <td>-</td>
+            <td>DB up to date</td>
+            <td>No Changes</td>
+          </tr>`;
+          const newRow = document.getElementById('tasks').insertRow(0);
+          newRow.innerHTML = html;
+      } else {
+        {% for task_id in task_queue %}
+          getStatus({{ task_id|tojson }})
+        {% endfor %}        
+      }
+    }
+</script>
+#}
+ <div>
+    <table>
+      <thead>
+        <tr>
+          <th>Task Id</th>
+          <th>Status</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody id="tasks">
+      </tbody>
+    </table>
+  </div>
+
+{% endblock %}

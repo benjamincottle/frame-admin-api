@@ -1,0 +1,5 @@
+{% extends 'base.html.tera' %}
+
+{% block content %}
+    <h1>{% block title %} Revoke {% endblock %}</h1>
+{% endblock %}
