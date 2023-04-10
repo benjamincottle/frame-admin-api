@@ -3,10 +3,9 @@
 {% block content %}
     <h1>{% block title %} Task Status{% endblock %}</h1>
 
-{#
 <script>
 function getStatus(taskID) {
-  fetch(`/frame_admin/tasks/${taskID}`, {
+  fetch(`/frame_admin/task/${taskID}`, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json'
@@ -17,8 +16,8 @@ function getStatus(taskID) {
     const html = `
       <tr>
         <td>${taskID}</td>
+        <td>${res.task_action}</td>
         <td>${res.task_status}</td>
-        <td>${res.task_result}</td>
       </tr>`;
 
     if (document.getElementById(taskID)){
@@ -31,16 +30,16 @@ function getStatus(taskID) {
     };
 
     const taskStatus = res.task_status;
-    if (taskStatus === 'SUCCESS' || taskStatus === 'FAILURE') return false;
+    if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
     setTimeout(function() {
       getStatus(res.task_id);
-    }, 4000);
+    }, 100);
   })
   .catch(err => console.log(err));
 }
 
     window.onload = function() {
-      if (({{ task_queue|tojson }}).length == 0) {
+      if (({{ task_queue| json_encode(pretty=true) | safe }}).length == 0) {
         const html = `
           <tr>
             <td>-</td>
@@ -51,19 +50,19 @@ function getStatus(taskID) {
           newRow.innerHTML = html;
       } else {
         {% for task_id in task_queue %}
-          getStatus({{ task_id|tojson }})
+          getStatus({{ task_id| json_encode(pretty=true) | safe }})
         {% endfor %}        
       }
     }
 </script>
-#}
+
  <div>
     <table>
       <thead>
         <tr>
           <th>Task Id</th>
+          <th>Action</th>
           <th>Status</th>
-          <th>Result</th>
         </tr>
       </thead>
       <tbody id="tasks">
