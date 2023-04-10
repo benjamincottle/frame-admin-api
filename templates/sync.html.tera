@@ -1,62 +1,60 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
-    <h1>{% block title %} Task Status{% endblock %}</h1>
+    <h1>{% block title %}Task Status{% endblock %}</h1>
 
 <script>
-function getStatus(taskID) {
-  fetch(`/frame_admin/task/${taskID}`, {
-    method: 'GET',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-  })
-  .then(response => response.json())
-  .then(res => {
-    const html = `
-      <tr>
-        <td>${taskID}</td>
-        <td>${res.task_action}</td>
-        <td>${res.task_status}</td>
-      </tr>`;
-
-    if (document.getElementById(taskID)){
-        const existingRow = document.getElementById(taskID);
-        existingRow.innerHTML = html;
-    } else {
-        const newRow = document.getElementById('tasks').insertRow(0);
-        newRow.id = `${taskID}`;
-        newRow.innerHTML = html;
-    };
-
-    const taskStatus = res.task_status;
-    if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
-    setTimeout(function() {
-      getStatus(res.task_id);
-    }, 500);
-  })
-  .catch(err => console.log(err));
-}
-
-    window.onload = function() {
-      if (({{ task_queue| json_encode(pretty=true) | safe }}).length == 0) {
-        const html = `
-          <tr>
-            <td>-</td>
-            <td>DB up to date</td>
-            <td>No Changes</td>
-          </tr>`;
-          const newRow = document.getElementById('tasks').insertRow(0);
-          newRow.innerHTML = html;
+  function getStatus(taskID) {
+    fetch(`/frame_admin/task/${taskID}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    .then(response => response.json())
+    .then(res => {
+      const html = `
+        <tr>
+          <td>${taskID}</td>
+          <td>${res.task_action}</td>
+          <td>${res.task_status}</td>
+        </tr>`;
+      if (document.getElementById(taskID)){
+          const existingRow = document.getElementById(taskID);
+          existingRow.innerHTML = html;
       } else {
-        {% for task_id in task_queue %}
-          getStatus({{ task_id| json_encode(pretty=true) | safe }})
-        {% endfor %}        
-      }
+          const newRow = document.getElementById('tasks').insertRow(0);
+          newRow.id = `${taskID}`;
+          newRow.innerHTML = html;
+      };
+      const taskStatus = res.task_status;
+      if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
+      setTimeout(function() {
+        getStatus(res.task_id);
+      }, 500);
+    })
+    .catch(err => console.log(err));
+  }
+
+  window.onload = function() {
+    if (({{ task_queue| json_encode(pretty=true) | safe }}).length == 0) {
+      const html = `
+        <tr>
+          <td>-</td>
+          <td>DB up to date</td>
+          <td>No Changes</td>
+        </tr>`;
+        const newRow = document.getElementById('tasks').insertRow(0);
+        newRow.innerHTML = html;
+    } else {
+      {% for task_id in task_queue %}
+        getStatus({{ task_id| json_encode(pretty=true) | safe }})
+      {% endfor %}        
     }
+  }
 </script>
 
- <div>
+  <div>
     <table>
       <thead>
         <tr>
