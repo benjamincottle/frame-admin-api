@@ -33,7 +33,7 @@ function getStatus(taskID) {
     if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
     setTimeout(function() {
       getStatus(res.task_id);
-    }, 100);
+    }, 500);
   })
   .catch(err => console.log(err));
 }
