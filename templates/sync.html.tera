@@ -19,14 +19,8 @@
           <td>${res.task_action}</td>
           <td>${res.task_status}</td>
         </tr>`;
-      if (document.getElementById(taskID)){
-          const existingRow = document.getElementById(taskID);
-          existingRow.innerHTML = html;
-      } else {
-          const newRow = document.getElementById('tasks').insertRow(0);
-          newRow.id = `${taskID}`;
-          newRow.innerHTML = html;
-      };
+      const existingRow = document.getElementById(taskID);
+      existingRow.innerHTML = html;
       const taskStatus = res.task_status;
       if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
       setTimeout(function() {
@@ -37,7 +31,7 @@
   }
 
   window.onload = function() {
-    if (({{ task_queue| json_encode(pretty=true) | safe }}).length == 0) {
+    if (({{ task_queue | json_encode(pretty=true) | safe }}).length == 0) {
       const html = `
         <tr>
           <td>-</td>
@@ -47,9 +41,18 @@
         const newRow = document.getElementById('tasks').insertRow(0);
         newRow.innerHTML = html;
     } else {
-      {% for task_id in task_queue %}
-        getStatus({{ task_id| json_encode(pretty=true) | safe }})
-      {% endfor %}        
+      const html = `
+        <tr>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>`;
+      for (const task_id of {{ task_queue | sort | reverse | json_encode(pretty=true) | safe }}) {
+        const newRow = document.getElementById('tasks').insertRow(0);
+        newRow.innerHTML = html;
+        newRow.id = task_id;
+        getStatus(task_id);
+      }
     }
   }
 </script>
