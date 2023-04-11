@@ -15,7 +15,8 @@
 <nav>
   <div>
     <a href="{{ url_for(name='index') }}">Index</a>
-    </div>
+    <a href="{{ url_for(name='sync') }}">Sync</a>
+    <a href="{{ url_for(name='revoke') }}">Revoke</a>
   </div>
 </nav>
 
