@@ -14,7 +14,7 @@
 
 
 {% block content %}
-    <h1>{% block title %} Telemetry {% endblock %}</h1>
+    <h1>{% block title %}Telemetry{% endblock %}</h1>
 
 <div>
   <div>

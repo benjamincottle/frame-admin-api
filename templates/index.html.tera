@@ -1,6 +1,6 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
-    <h1 class="mt-2">{% block title %} Index {% endblock %}</h1>
+    <h1 class="mt-2">{% block title %}Index{% endblock %}</h1>
     {{ message }}
 {% endblock %}

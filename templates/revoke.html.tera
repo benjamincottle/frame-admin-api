@@ -1,5 +1,6 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
-    <h1>{% block title %} Revoke {% endblock %}</h1>
+    <h1>{% block title %}Revoke{% endblock %}</h1>
+    {{ message }}
 {% endblock %}
