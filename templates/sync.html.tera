@@ -47,7 +47,7 @@
           <td></td>
           <td></td>
         </tr>`;
-      for (const task_id of {{ task_queue | sort | reverse | json_encode(pretty=true) | safe }}) {
+      for (const task_id of {{ task_queue | reverse | json_encode(pretty=true) | safe }}) {
         const newRow = document.getElementById('tasks').insertRow(0);
         newRow.innerHTML = html;
         newRow.id = task_id;
