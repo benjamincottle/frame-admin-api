@@ -1,14 +1,16 @@
 {% extends 'base.html.tera' %}
 
 {% block tel_css %}
-  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs5/jq-3.6.0/dt-1.12.1/datatables.min.css"/>
+  <link rel="stylesheet" type="text/css" href=href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
 {% endblock %}
 
 {% block tel_js %}
-  <script type="text/javascript" src="https://cdn.datatables.net/v/bs5/jq-3.6.0/dt-1.12.1/datatables.min.js"></script>
+  <script type="text/javascript" src=https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js"></script>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.1.0/highcharts.js" integrity="sha512-8mNMOCKB2dbqlbvEAC4C4aMIioDavSLzEHF4P/A+V8ODWoaRnBz4zar7CGM8o1teyAV1sI7n6NhMLfgNZThWIA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.3/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.34/moment-timezone-with-data-10-year-range.min.js" integrity="sha512-d11VXfxQMn+sZuIgzHITdIuInr4cVRGV/uLiSI643WH/J+p4gPFYSHXRMR2v+w4Rn2TSyzJjsZjc0M7+Qd+UXw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" integrity="sha512-d11VXfxQMn+sZuIgzHITdIuInr4cVRGV/uLiSI643WH/J+p4gPFYSHXRMR2v+w4Rn2TSyzJjsZjc0M7+Qd+UXw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
 {% endblock %}
 
 
@@ -19,10 +21,9 @@
 <div>
   <div>
     <div>
-{#        <a href="{{ mediaItem.get('productUrl') if mediaItem is not none else '#'}}" target="_blank">
-            <img src="{{ mediaItem.get('baseUrl') + '=w350-h261-c' if mediaItem is not none else '#'}}" class="img-fluid rounded m-3">
+        <a href="{{ product_url }}" target="_blank">
+            <img src="{{ '/frame_admin/image/' ~ item_id }}">
         </a>
-#}
     </div>
     <div>
       <div id="chart"></div>
@@ -60,7 +61,7 @@
         dom: "<'row'<'col-sm-12 col-md-8'l><'col-sm-12 col-md-4'i>>" +
              "<'row'<'col-sm-12 col-md-6'f><'col-sm-12 col-md-6'p>>" +
              "<'row'<'col-sm-12'tr>>",
-        ajax: '/api/admin/telemetry_data',
+        ajax: '/frame_admin/telemetry_data',
         //processing: true,
         responsive: true,
         serverSide: true,
