@@ -103,27 +103,27 @@
         ],
       });
 
-    // const tableData=getTableData(table);
-    // createHighCharts(tableData);
-    // rsetTableEvents(table);
+      const chartData = getChartData(table);
+      createHighCharts(chartData);
+      setTableEvents(table);
     });
 
-    function getTableData(table) {
-        let _id;
-        let batVoltage;
+    function getChartData(table) {
+        let ts;
+        let bat_voltage;
         const dataArray=[];
         table.rows({search:"applied"}).every(function(){
             const data=this.data();
-            _id  = new Date(data['_id']).getTime();
-            if (data['errorCode'] == 0) {
-                batVoltage = data['batVoltage'];
+            ts = data['ts'] * 1000;
+            if (data['error_code'] == 0) {
+                bat_voltage = data['bat_voltage'];
             }
             else {
-                batVoltage = {y: data['batVoltage'], color: 'red'};
+                bat_voltage = {y: data['bat_voltage'], color: 'red'};
             }
-            dataArray.push([_id, batVoltage])    
+            dataArray.push([ts, bat_voltage])
         });
-        return dataArray
+        return dataArray.sort();
     }
 
     function createHighCharts(data){
@@ -190,8 +190,8 @@
 
   function setTableEvents(table) {
       table.on("draw",()=>{
-        // const tableData=getTableData(table);
-        // createHighCharts(tableData);
+        const chartData = getChartData(table);
+        createHighCharts(chartData);
       });
   }
 
