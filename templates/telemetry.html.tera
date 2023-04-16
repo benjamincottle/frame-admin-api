@@ -1,23 +1,18 @@
 {% extends 'base.html.tera' %}
 
 {% block tel_css %}
-  <link rel="stylesheet" type="text/css" href=href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
+  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
 {% endblock %}
 
 {% block tel_js %}
-  <script type="text/javascript" src=https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js"></script>
-
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.1.0/highcharts.js" integrity="sha512-8mNMOCKB2dbqlbvEAC4C4aMIioDavSLzEHF4P/A+V8ODWoaRnBz4zar7CGM8o1teyAV1sI7n6NhMLfgNZThWIA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.3.3/highcharts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" integrity="sha512-d11VXfxQMn+sZuIgzHITdIuInr4cVRGV/uLiSI643WH/J+p4gPFYSHXRMR2v+w4Rn2TSyzJjsZjc0M7+Qd+UXw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
-
-
 
 {% block content %}
     <h1>{% block title %}Telemetry{% endblock %}</h1>
-
 <div>
   <div>
     <div>
@@ -32,18 +27,18 @@
 </div>
 <br>
 
-  <table id="data" class="table table-striped text-responsive">
+  <table id="data" class="stripe">
     <thead>
       <tr>
-        <th>timestamp</th>
-        <th>chipID</th>
-        <th>uuidNumber</th>
-        <th>batVoltage</th>
-        <th>bootCode</th>
-        <th>errorCode</th>
-        <th>returnCode</th>
-        <th>writeBytes</th>
-        <th>remote_addr</th>
+        <th>Timestamp</th>
+        <th>Chip ID</th>
+        <th>UUID Number</th>
+        <th>Battery Voltage</th>
+        <th>Boot Code</th>
+        <th>Error Code</th>
+        <th>Return Code</th>
+        <th>Write Bytes</th>
+        <th>Remote Addr</th>
       </tr>
     </thead>
     <tbody>
@@ -54,13 +49,12 @@
 {% endblock %}
 
 {% block scripts %}
-{#
   <script>
     $(document).ready(function () {
       const table=$('#data').DataTable({
-        dom: "<'row'<'col-sm-12 col-md-8'l><'col-sm-12 col-md-4'i>>" +
-             "<'row'<'col-sm-12 col-md-6'f><'col-sm-12 col-md-6'p>>" +
-             "<'row'<'col-sm-12'tr>>",
+        dom: "<'row'<l><i>>" +
+            "<'row'<f><p>>" +
+             "<'row'<tr>>",
         ajax: '/frame_admin/telemetry_data',
         //processing: true,
         responsive: true,
@@ -71,7 +65,7 @@
         search: {
             smart: false,
             regex: true,
-            return: false
+            return: true
         },
         lengthMenu: [ [10, 20, 50, 100, -1], [10, 20, 50, 100, "All"] ],
         pageLength: 20,
@@ -90,22 +84,28 @@
                 "previous":   " < "
             }
         },
+        columnDefs: [
+            { "targets": "_all", "searchable": true },
+            { "targets": [5, 6, 7, 8], "defaultContent": "None" },
+            { "targets": 0, "render": function (data, type, row, meta) { return moment.unix(data).format("DD-MM-YYYY HH:MM") }},
+            { "targets": 2, "render": function ( data, type, row, meta ) { return type === 'display' && data.length > 20 ? '<span title="'+data+'">'+data.substr( 0, 18 )+'...</span>' : data; }}
+        ],
         columns: [
-          {data: '_id', searchable: true},
-          {data: 'chipID', searchable: true},
-          {data: 'uuidNumber', searchable: true},
-          {data: 'batVoltage', searchable: true},
-          {data: 'bootCode', searchable: true},
-          {data: 'errorCode', 'defaultContent': 'None', searchable: true},
-          {data: 'returnCode', 'defaultContent': 'None', searchable: true},
-          {data: 'writeBytes', 'defaultContent': 'None', searchable: true},
-          {data: 'remote_addr', 'defaultContent': 'None', searchable: true}
+          {data: 'ts'},
+          {data: 'chip_id'},
+          {data: 'uuid_number'},
+          {data: 'bat_voltage'},
+          {data: 'boot_code'},
+          {data: 'error_code'},
+          {data: 'return_code'},
+          {data: 'write_bytes'},
+          {data: 'remote_addr'}
         ],
       });
 
-    const tableData=getTableData(table);
-    createHighCharts(tableData);
-    setTableEvents(table);
+    // const tableData=getTableData(table);
+    // createHighCharts(tableData);
+    // rsetTableEvents(table);
     });
 
     function getTableData(table) {
@@ -190,11 +190,10 @@
 
   function setTableEvents(table) {
       table.on("draw",()=>{
-        const tableData=getTableData(table);
-        createHighCharts(tableData);
+        // const tableData=getTableData(table);
+        // createHighCharts(tableData);
       });
   }
 
   </script>
-#}
 {% endblock %}
