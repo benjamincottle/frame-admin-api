@@ -1,6 +1,49 @@
 {% extends 'base.html.tera' %}
 {% block tel_css %}
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
+    <style>
+      .tchart {
+        width: 100%;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .highcharts-color-0 {
+          fill: #0460ba;
+          stroke: #0460ba;
+      }
+      .highcharts-color-1 {
+          fill: #9696ab;
+          stroke: #9696ab;
+      }      
+      .highcharts-background {
+          fill: var(--background-color);
+      }
+      .highcharts-container text {
+          fill: var(--text-color);
+      }
+      .highcharts-subtitle,
+      .highcharts-credits,
+      .highcharts-axis-title {
+          fill-opacity: 0.7;
+      }
+      .highcharts-tick, 
+      .highcharts-axis-line, 
+      .highcharts-grid-line {
+          stroke: var(--text-color);
+          stroke-opacity: 0.2;
+      }
+      .highcharts-tooltip-box {
+          fill: var(--text-color);
+      }
+      .highcharts-column-series rect.highcharts-point {
+          stroke: var(--background-color);
+      }
+      input,
+      select {
+        color: #777777;
+      }
+    </style>    
 {% endblock %}
 {% block tel_js %}
     <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -9,37 +52,36 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
 {% block content %}
-            <h1>{% block title %}Telemetry{% endblock %}</h1>
-            <section class="tchart">
-              <div>
-                <a href="{{ product_url }}" target="_blank">
-                  <img src="{{ '/frame_admin/image/' ~ item_id }}">
-                </a>
-              </div>
-              <div class="grow1" id="chart"></div>
-            </section>
-            <br /><br />
-            <section>
-              <div class="grow1">
-                <table id="data"  class="display">
-                  <thead>
-                    <tr>
-                      <th>Timestamp</th>
-                      <th>Chip ID</th>
-                      <th>UUID Number</th>
-                      <th>Battery Voltage</th>
-                      <th>Boot Code</th>
-                      <th>Error Code</th>
-                      <th>Return Code</th>
-                      <th>Write Bytes</th>
-                      <th>Remote Addr</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                  </tbody>
-                </table>
-              </div>
-            </section>
+        <section class="tchart">
+          <div>
+            <a href="{{ product_url }}" target="_blank">
+              <img src="{{ '/frame_admin/image/' ~ item_id }}">
+            </a>
+          </div>
+          <div class="grow1" id="chart"></div>
+        </section>
+        <br /><br />
+        <section>
+          <div class="grow1">
+            <table id="data" class="display">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Chip ID</th>
+                  <th>UUID Number</th>
+                  <th>Battery Voltage</th>
+                  <th>Boot Code</th>
+                  <th>Error Code</th>
+                  <th>Return Code</th>
+                  <th>Write Bytes</th>
+                  <th>Remote Addr</th>
+                </tr>
+               </thead>
+              <tbody>
+              </tbody>
+            </table>
+          </div>
+        </section>
 {% endblock %}
 {% block scripts %}
     <script>

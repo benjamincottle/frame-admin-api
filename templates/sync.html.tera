@@ -1,8 +1,6 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
-    <h1>{% block title %}Task Status{% endblock %}</h1>
-
 <script>
   function getStatus(taskID) {
     fetch(`/frame_admin/task/${taskID}`, {
