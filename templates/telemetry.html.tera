@@ -1,199 +1,193 @@
 {% extends 'base.html.tera' %}
-
 {% block tel_css %}
-  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
 {% endblock %}
-
 {% block tel_js %}
-  <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.3.3/highcharts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.3.3/highcharts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
-
 {% block content %}
-    <h1>{% block title %}Telemetry{% endblock %}</h1>
-<div>
-  <div>
-    <div>
-        <a href="{{ product_url }}" target="_blank">
-            <img src="{{ '/frame_admin/image/' ~ item_id }}">
-        </a>
-    </div>
-    <div>
-      <div id="chart"></div>
-    </div>
-  </div>
-</div>
-<br>
-
-  <table id="data" class="stripe">
-    <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Chip ID</th>
-        <th>UUID Number</th>
-        <th>Battery Voltage</th>
-        <th>Boot Code</th>
-        <th>Error Code</th>
-        <th>Return Code</th>
-        <th>Write Bytes</th>
-        <th>Remote Addr</th>
-      </tr>
-    </thead>
-    <tbody>
-    </tbody>
-  </table>
-    <br />
-    <br />
+            <h1>{% block title %}Telemetry{% endblock %}</h1>
+            <section class="tchart">
+              <div>
+                <a href="{{ product_url }}" target="_blank">
+                  <img src="{{ '/frame_admin/image/' ~ item_id }}">
+                </a>
+              </div>
+              <div class="grow1" id="chart"></div>
+            </section>
+            <br /><br />
+            <section>
+              <div class="grow1">
+                <table id="data"  class="display">
+                  <thead>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Chip ID</th>
+                      <th>UUID Number</th>
+                      <th>Battery Voltage</th>
+                      <th>Boot Code</th>
+                      <th>Error Code</th>
+                      <th>Return Code</th>
+                      <th>Write Bytes</th>
+                      <th>Remote Addr</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  </tbody>
+                </table>
+              </div>
+            </section>
 {% endblock %}
-
 {% block scripts %}
-  <script>
-    $(document).ready(function () {
-      const table=$('#data').DataTable({
-        dom: "<'row'<l><i>>" +
-            "<'row'<f><p>>" +
-             "<'row'<tr>>",
-        ajax: '/frame_admin/telemetry_data',
-        //processing: true,
-        responsive: true,
-        serverSide: true,
-        order: [[0, 'desc']],
-        ordering: false,
-        searching: true,
-        search: {
-            smart: false,
-            regex: true,
-            return: true
-        },
-        lengthMenu: [ [10, 20, 50, 100, -1], [10, 20, 50, 100, "All"] ],
-        pageLength: 20,
-        scrollY: 700,
-        scrollCollapse: true,
-        language: {
-            info: "Showing _START_ to _END_ of _TOTAL_ log entries",
-            lengthMenu: "Display _MENU_ log entries",
-            infoFiltered:   "(_MAX_ total)",
-            search: "_INPUT_",
-            searchPlaceholder: "Search...",
-            paginate: {
-                "first":      "First",
-                "last":       "Last",
-                "next":       " > ",
-                "previous":   " < "
-            }
-        },
-        columnDefs: [
-            { "targets": "_all", "searchable": true },
-            { "targets": [5, 6, 7, 8], "defaultContent": "None" },
-            { "targets": 0, "render": function (data, type, row, meta) { return moment.unix(data).format("DD-MM-YYYY HH:MM") }},
-            { "targets": 2, "render": function ( data, type, row, meta ) { return type === 'display' && data.length > 20 ? '<span title="'+data+'">'+data.substr( 0, 18 )+'...</span>' : data; }}
-        ],
-        columns: [
-          {data: 'ts'},
-          {data: 'chip_id'},
-          {data: 'uuid_number'},
-          {data: 'bat_voltage'},
-          {data: 'boot_code'},
-          {data: 'error_code'},
-          {data: 'return_code'},
-          {data: 'write_bytes'},
-          {data: 'remote_addr'}
-        ],
-      });
-
-      const chartData = getChartData(table);
-      createHighCharts(chartData);
-      setTableEvents(table);
-    });
-
-    function getChartData(table) {
-        let ts;
-        let bat_voltage;
-        const dataArray=[];
-        table.rows({search:"applied"}).every(function(){
-            const data=this.data();
-            ts = data['ts'] * 1000;
-            if (data['error_code'] == 0) {
-                bat_voltage = data['bat_voltage'];
-            }
-            else {
-                bat_voltage = {y: data['bat_voltage'], color: 'red'};
-            }
-            dataArray.push([ts, bat_voltage])
+    <script>
+      $(document).ready(function () {
+        const table=$('#data').DataTable({
+          dom: "<'row'<l><i>>" +
+              "<'row'<f><p>>" +
+              "<'row'<tr>>",
+          ajax: '/frame_admin/telemetry_data',
+          //processing: true,
+          responsive: true,
+          serverSide: true,
+          order: [[0, 'desc']],
+          ordering: false,
+          searching: true,
+          search: {
+              smart: false,
+              regex: true,
+              return: true
+          },
+          lengthMenu: [ [10, 20, 50, 100, -1], [10, 20, 50, 100, "All"] ],
+          pageLength: 20,
+          scrollY: 700,
+          scrollCollapse: true,
+          language: {
+              info: "Showing _START_ to _END_ of _TOTAL_ log entries",
+              lengthMenu: "Display _MENU_ log entries",
+              infoFiltered:   "(_MAX_ total)",
+              search: "_INPUT_",
+              searchPlaceholder: "Search...",
+              paginate: {
+                  "first":      "First",
+                  "last":       "Last",
+                  "next":       " > ",
+                  "previous":   " < "
+              }
+          },
+          columnDefs: [
+              { "targets": "_all", "searchable": true },
+              { "targets": [5, 6, 7, 8], "defaultContent": "None" },
+              { "targets": 0, "render": function (data, type, row, meta) { return moment.unix(data).format("DD-MM-YYYY HH:MM") }},
+              { "targets": 2, "render": function ( data, type, row, meta ) { return type === 'display' && data.length > 20 ? '<span title="'+data+'">'+data.substr( 0, 18 )+'...</span>' : data; }}
+          ],
+          columns: [
+            {data: 'ts'},
+            {data: 'chip_id'},
+            {data: 'uuid_number'},
+            {data: 'bat_voltage'},
+            {data: 'boot_code'},
+            {data: 'error_code'},
+            {data: 'return_code'},
+            {data: 'write_bytes'},
+            {data: 'remote_addr'}
+          ],
         });
-        return dataArray.sort();
-    }
 
-    function createHighCharts(data){
-        Highcharts.setOptions({
-            lang: {
-                thousandsSep: ""
-            },
-            plotOptions: {
-                series: {
-                    animation: false
-                }
-            },
-            time: {
-                timezone: 'Australia/Sydney'
-            }
-        });
-        Highcharts.chart("chart",{
-            chart: {
-                zoomType: 'x'
-            },
-            title:{
-                text: "Battery Voltage (mV)"
-            },
-            legend: {
-                enabled: false,
-            },
-            tooltip: {
-                xDateFormat: "%a %e %b %Y, %l:%M%P",
-                valueSuffix: "mV"
-            },
-            xAxis:[
-            {
-                type: "datetime",
-                labels: {
-                    format: "{value: %e %b %l%P}",
-                    rotation: -45
-                },
-                gridLineWidth: 1,
-            }
-            ],
-
-            yAxis: {
-                title: {
-                    text: "Voltage(mv)"
-                }
-            },
-            series: [
-            {
-                name: "Battery Voltage",
-                color: "#0d6efd",
-                type: "spline",
-                data: data,
-            }
-            ],
-            credits: {
-                enabled: false
-            },
-            accessibility: {
-                enabled: false
-            }
-
-          });
-    }
-
-  function setTableEvents(table) {
-      table.on("draw",()=>{
         const chartData = getChartData(table);
         createHighCharts(chartData);
+        setTableEvents(table);
       });
-  }
 
-  </script>
+      function getChartData(table) {
+          let ts;
+          let bat_voltage;
+          const dataArray=[];
+          table.rows({search:"applied"}).every(function(){
+              const data=this.data();
+              ts = data['ts'] * 1000;
+              if (data['error_code'] == 0) {
+                  bat_voltage = data['bat_voltage'];
+              }
+              else {
+                  bat_voltage = {y: data['bat_voltage'], color: 'red'};
+              }
+              dataArray.push([ts, bat_voltage])
+          });
+          return dataArray.sort();
+      }
+
+      function createHighCharts(data){
+          Highcharts.setOptions({
+              lang: {
+                  thousandsSep: ""
+              },
+              plotOptions: {
+                  series: {
+                      animation: false
+                  }
+              },
+              time: {
+                  timezone: 'Australia/Sydney'
+              }
+          });
+          Highcharts.chart("chart",{
+              chart: {
+                  zoomType: 'x'
+              },
+              title:{
+                  text: "Battery Voltage (mV)",
+                  style: { "color": "var(--text-color)", "opacity": "0.5" }
+              },
+              legend: {
+                  enabled: false,
+              },
+              tooltip: {
+                  xDateFormat: "%a %e %b %Y, %l:%M%P",
+                  valueSuffix: "mV"
+              },
+              xAxis:[
+              {
+                  type: "datetime",
+                  labels: {
+                      format: "{value: %e %b %l%P}",
+                      rotation: -45
+                  },
+                  gridLineWidth: 1,
+              }
+              ],
+
+              yAxis: {
+                  title: {
+                      text: "Voltage(mv)"
+                  }
+              },
+              series: [
+              {
+                  name: "Battery Voltage",
+                  color: "#0d6efd",
+                  type: "spline",
+                  data: data,
+              }
+              ],
+              credits: {
+                  enabled: false
+              },
+              accessibility: {
+                  enabled: false
+              }
+
+            });
+      }
+
+    function setTableEvents(table) {
+        table.on("draw",()=>{
+          const chartData = getChartData(table);
+          createHighCharts(chartData);
+        });
+    }
+    </script>
 {% endblock %}
+

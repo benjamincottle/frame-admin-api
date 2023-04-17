@@ -3,29 +3,96 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  {% block tel_css %}{% endblock %}
-
-  {% block tel_js %}{% endblock %}
-
+    {% block tel_css %}{% endblock %}
+    {% block tel_js %}{% endblock %}
     <title>{% block title %} {% endblock %} - Frame Admin</title>
+    <style>
+      :root {
+          --background-color: #1F2227;
+          --text-color: #c0c0c0;
+      }
+      * {
+          font-family: monospace;
+      }
+      body {
+        background-color: var(--background-color);
+        color: var(--text-color);
+      }    
+      .baselayout {
+        display: flex;
+        width: 100%;
+        flex-direction: column;
+        gap: 16px;
+        align-items: center;
+      }
+      .nav {
+        font-size: 20px;
+        font-weight: bold;
+        width: 100%;
+        height: 30px;
+        display: flex;
+        gap: 8px;
+      }
+      .tchart {
+        width: 100%;
+        display: flex;
+        gap: 16px;
+        align-items: center;
+      }
+      .grow1 { 
+        flex-grow: 1; 
+      }
+      .highcharts-color-0 {
+          fill: #0460ba;
+          stroke: #0460ba;
+      }
+      .highcharts-color-1 {
+          fill: #9696ab;
+          stroke: #9696ab;
+      }      
+      .highcharts-background {
+          fill: var(--background-color);
+      }
+      .highcharts-container text {
+          fill: var(--text-color);
+      }
+      .highcharts-subtitle,
+      .highcharts-credits,
+      .highcharts-axis-title {
+          fill-opacity: 0.7;
+      }
+      .highcharts-tick, 
+      .highcharts-axis-line, 
+      .highcharts-grid-line {
+          stroke: var(--text-color);
+          stroke-opacity: 0.2;
+      }
+      .highcharts-tooltip-box {
+          fill: var(--text-color);
+      }
+      .highcharts-column-series rect.highcharts-point {
+          stroke: var(--background-color);
+      }
+      a,
+      h1,
+      input,
+      select {
+        color: #777777;
+      }
+    </style>
   </head>
   <body>
-
-<nav>
-  <div>
-    <a href="{{ url_for(name='index') }}">Index</a>
-    <a href="{{ url_for(name='sync') }}">Sync</a>
-    <a href="{{ url_for(name='telemetry') }}">Telemetry</a>
-    <a href="{{ url_for(name='revoke') }}">Revoke</a>
-  </div>
-</nav>
-
-    <div class="container">
-        {% block content %} {% endblock %}
-    </div>
-
+    <section class="baselayout">
+      <div class="nav">
+        <a href="{{ url_for(name='index') }}">Index</a>
+        <a href="{{ url_for(name='sync') }}">Sync</a>
+        <a href="{{ url_for(name='telemetry') }}">Telemetry</a>
+        <a href="{{ url_for(name='revoke') }}">Revoke</a>    
+      </div>
+      <div class="grow1">
+            {% block content %} {% endblock %}
+      </div>
+    </section>
     {% block scripts %}{% endblock %}
-
   </body>
 </html>
