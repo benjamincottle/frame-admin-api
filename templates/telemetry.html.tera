@@ -109,7 +109,7 @@
               regex: true,
               return: true
           },
-          lengthMenu: [ [10, 20, 50, 100, -1], [10, 20, 50, 100, "All"] ],
+          lengthMenu: [ [10, 20, 50, 100, 250, 500, -1], [10, 20, 50, 100, 250, 500, "All"] ],
           pageLength: 20,
           scrollY: 700,
           scrollCollapse: true,
