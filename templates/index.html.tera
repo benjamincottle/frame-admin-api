@@ -1,9 +1,7 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
-        <section>
-          <div class="grow1">
+          <div class="layout">
             {{ message }}
           </div>
-        </section>
 {% endblock %}

@@ -18,23 +18,13 @@
         background-color: var(--background-color);
         color: var(--text-color);
       }    
-      .baselayout {
+    
+      .layout {
+        padding-top: 10px;
+        padding-left: 10px;
+        padding-bottom: 20px;
         display: flex;
-        width: 100%;
         flex-direction: column;
-        gap: 16px;
-        align-items: center;
-      }
-      .nav {
-        font-size: 20px;
-        font-weight: bold;
-        width: 100%;
-        height: 30px;
-        display: flex;
-        gap: 8px;
-      }
-      .grow1 { 
-        flex-grow: 1; 
       }
       a,
       h1 {
@@ -47,17 +37,18 @@
     </style>
   </head>
   <body>
-    <section class="baselayout">
-      <div class="nav">
+    <section class="layout">
+      <div>
         <a href="{{ url_for(name='index') }}"><button type="button">Index</button></a>
         <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
         <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
         <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
       </div>
-      <div class="grow1">
+      <div>
         {% block content %} {% endblock %}
       </div>
     </section>
+    </div>
     {% block scripts %}{% endblock %}
   </body>
 </html>
