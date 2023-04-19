@@ -48,7 +48,7 @@
         padding-left: 50px;
         padding-right: 50px;
       }
-      .grow1 { flex-grow: 1; }
+      .grow { flex-grow: 1; }
         .img-fluid {
         max-width: 100%;
         height: auto;
@@ -63,9 +63,12 @@
 {% endblock %}
 {% block content %}
         <div class="imgchartrow">
-          <div id="photo">
+          <div>
+            <a href ="#" id="link" target="_">
+              <img id="photo" src="#">
+            </a>
           </div>
-          <div id="chart" class="grow1"></div>
+          <div id="chart" class="grow"></div>
         </div>
         <div class="dtable">
         <table id="data" class="display">
@@ -152,28 +155,7 @@
             { data: "remote_addr" },
           ],
         });
-        setTableEvents(table);
-      });
 
-      function getChartData(table) {
-        let ts;
-        let bat_voltage;
-        const dataArray = [];
-        table.rows({ search: "applied" }).every(function () {
-          const data = this.data();
-          data["error_code"] == 0
-            ? dataArray.push({ x: data["ts"] * 1000, y: data["bat_voltage"] })
-            : dataArray.push({
-                x: data["ts"] * 1000,
-                y: data["bat_voltage"],
-                color: "#bf616a",
-              });
-        });
-        dataArray.sort().reverse();
-        return dataArray;
-      }
-
-      function createHighCharts(data) {
         Highcharts.setOptions({
           lang: {
             thousandsSep: "",
@@ -186,8 +168,9 @@
           time: {
             timezone: "Australia/Sydney",
           },
-        });
-        Highcharts.chart("chart", {
+        });          
+
+        const chart = Highcharts.chart("chart", {
           chart: {
             zoomType: "x",
           },
@@ -223,7 +206,7 @@
               name: "Battery Voltage",
               color: "#5e81ac",
               type: "spline",
-              data: data,
+              data: [],
             },
           ],
           credits: {
@@ -233,11 +216,39 @@
             enabled: false,
           },
         });
+
+        setTableEvents(table);
+      });
+
+      function renderChartData(table) {
+        let ts;
+        let bat_voltage;
+        let series = Highcharts.charts[0].series[0];
+        const dataArray = [];
+        table.rows({ search: "applied" }).every(function () {
+          const data = this.data();
+          data["error_code"] == 0
+            ? dataArray.push({ x: data["ts"] * 1000, y: data["bat_voltage"] })
+            : dataArray.push({
+                x: data["ts"] * 1000,
+                y: data["bat_voltage"],
+                color: "#bf616a",
+              });
+        });
+        dataArray.sort().reverse();
+        series.setData(dataArray);
       }
 
       function updatePhoto(src, href) {
-        const productDiv = document.getElementById("photo");
-        productDiv.innerHTML = `<a href="${href}"><img src="image/${src}"></a>`;
+        const photo = document.getElementById("photo");
+        photo.src = "image/" + src;
+        const link = document.getElementById("link");
+        link.href = href;
+      }
+
+      function styleDatapoint(pointIndex, style) {
+        let series = Highcharts.charts[0].series[0];
+        series.data[pointIndex].setState(style);
       }
 
       function setTableEvents(table) {
@@ -245,13 +256,17 @@
           updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"]);
         })
         .on('click', 'tr', function() {
-        updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"]);
+          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"]);
+        })
+        .on('mouseover', 'tr', function() {
+           styleDatapoint(table.row(this).index(), "hover");
+        })
+        .on('mouseout', 'tr', function() {
+          styleDatapoint(table.row(this).index(), "normal");
         })
         .on("draw", () => {
-          const chartData = getChartData(table);
-          createHighCharts(chartData);
+          renderChartData(table);
         });
       }
     </script>
 {% endblock %}
-
