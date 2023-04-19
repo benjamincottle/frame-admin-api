@@ -63,10 +63,7 @@
 {% endblock %}
 {% block content %}
         <div class="imgchartrow">
-          <div>
-            <a href="{{ product_url }}" target="_blank">
-              <img class="img-fluid" src="{{ '/frame_admin/image/' ~ item_id }}">
-            </a>
+          <div id="photo">
           </div>
           <div id="chart" class="grow1"></div>
         </div>
@@ -96,145 +93,162 @@
 {% block scripts %}
     <script>
       $(document).ready(function () {
-        const table=$('#data').DataTable({
-          dom: "<'row'<l><i>>" +
-              "<'row'<f><p>>" +
-              "<'row'<tr>>",
-          ajax: '/frame_admin/telemetry_data',
+        const table = $("#data").DataTable({
+          dom: "<'row'<l><i>>" + "<'row'<f><p>>" + "<'row'<tr>>",
+          ajax: "/frame_admin/telemetry_data",
           responsive: true,
           serverSide: true,
-          order: [[1, 'desc']],
+          order: [[1, "desc"]],
           ordering: false,
           searching: false,
-          lengthMenu: [ [10, 20, 50, 100, 250, 500, -1], [10, 20, 50, 100, 250, 500, "All"] ],
+          lengthMenu: [
+            [10, 20, 50, 100, 250, 500, -1],
+            [10, 20, 50, 100, 250, 500, "All"],
+          ],
           pageLength: 20,
           scrollY: 700,
           scrollCollapse: true,
           language: {
-              info: "Showing _START_ to _END_ of _TOTAL_ log entries",
-              lengthMenu: "Display _MENU_ log entries",
-              paginate: {
-                  "first":      "First",
-                  "last":       "Last",
-                  "next":       " > ",
-                  "previous":   " < "
-              }
+            info: "Showing _START_ to _END_ of _TOTAL_ log entries",
+            lengthMenu: "Display _MENU_ log entries",
+            paginate: {
+              first: "First",
+              last: "Last",
+              next: " > ",
+              previous: " < ",
+            },
           },
           columnDefs: [
-              { "targets": [0, 2, 3], "visible": false },
-              { "targets": [0, 1, 4, 6, 7, 8, 9, 10 ], "type": "num" },
-              { "targets": [2, 3, 9, 10], "defaultContent": "None" },
-              { "targets": 1, "render": function (data, type, row, meta) { return moment.unix(data).format("DD-MM-YYYY HH:MM") }},
-              { "targets": 5, "render": function ( data, type, row, meta ) { return type === 'display' && data.length > 20 ? '<span title="'+data+'">'+data.substr( 0, 18 )+'...</span>' : data; }}
+            { targets: [0, 2, 3], visible: false },
+            { targets: [0, 1, 4, 6, 7, 8, 9, 10], type: "num" },
+            { targets: [2, 3, 9, 10], defaultContent: "None" },
+            {
+              targets: 1,
+              render: function (data, type, row, meta) {
+                return moment.unix(data).format("DD-MM-YYYY HH:MM");
+              },
+            },
+            {
+              targets: 5,
+              render: function (data, type, row, meta) {
+                return type === "display" && data.length > 20
+                  ? '<span title="' + data + '">' + data.substr(0, 18) + "...</span>"
+                  : data;
+              },
+            },
           ],
           columns: [
-            {data: 'id'},
-            {data: 'ts'},
-            {data: 'item_id'},
-            {data: 'product_url'},
-            {data: 'chip_id'},
-            {data: 'uuid_number'},
-            {data: 'bat_voltage'},
-            {data: 'boot_code'},
-            {data: 'error_code'},
-            {data: 'return_code'},
-            {data: 'write_bytes'},
-            {data: 'remote_addr'}
+            { data: "id" },
+            { data: "ts" },
+            { data: "item_id" },
+            { data: "product_url" },
+            { data: "chip_id" },
+            { data: "uuid_number" },
+            { data: "bat_voltage" },
+            { data: "boot_code" },
+            { data: "error_code" },
+            { data: "return_code" },
+            { data: "write_bytes" },
+            { data: "remote_addr" },
           ],
         });
-
-        const chartData = getChartData(table);
-        createHighCharts(chartData);
         setTableEvents(table);
       });
 
       function getChartData(table) {
-          let ts;
-          let bat_voltage;
-          const dataArray=[];
-          table.rows({search:"applied"}).every(function(){
-              const data=this.data();
-              ts = data['ts'] * 1000;
-              if (data['error_code'] == 0) {
-                  bat_voltage = data['bat_voltage'];
-              }
-              else {
-                  bat_voltage = {y: data['bat_voltage'], color: 'red'};
-              }
-              dataArray.push([ts, bat_voltage])
-          });
-          return dataArray.sort();
+        let ts;
+        let bat_voltage;
+        const dataArray = [];
+        table.rows({ search: "applied" }).every(function () {
+          const data = this.data();
+          data["error_code"] == 0
+            ? dataArray.push({ x: data["ts"] * 1000, y: data["bat_voltage"] })
+            : dataArray.push({
+                x: data["ts"] * 1000,
+                y: data["bat_voltage"],
+                color: "#bf616a",
+              });
+        });
+        dataArray.sort().reverse();
+        return dataArray;
       }
 
-      function createHighCharts(data){
-          Highcharts.setOptions({
-              lang: {
-                  thousandsSep: ""
+      function createHighCharts(data) {
+        Highcharts.setOptions({
+          lang: {
+            thousandsSep: "",
+          },
+          plotOptions: {
+            series: {
+              animation: false,
+            },
+          },
+          time: {
+            timezone: "Australia/Sydney",
+          },
+        });
+        Highcharts.chart("chart", {
+          chart: {
+            zoomType: "x",
+          },
+          title: {
+            text: "Battery Voltage (mV)",
+            style: { color: "var(--text-color)", opacity: "0.5" },
+          },
+          legend: {
+            enabled: false,
+          },
+          tooltip: {
+            xDateFormat: "%a %e %b %Y, %l:%M%P",
+            valueSuffix: "mV",
+          },
+          xAxis: [
+            {
+              type: "datetime",
+              labels: {
+                format: "{value: %e %b %l%P}",
+                rotation: -45,
               },
-              plotOptions: {
-                  series: {
-                      animation: false
-                  }
-              },
-              time: {
-                  timezone: 'Australia/Sydney'
-              }
-          });
-          Highcharts.chart("chart",{
-              chart: {
-                  zoomType: 'x'
-              },
-              title:{
-                  text: "Battery Voltage (mV)",
-                  style: { "color": "var(--text-color)", "opacity": "0.5" }
-              },
-              legend: {
-                  enabled: false,
-              },
-              tooltip: {
-                  xDateFormat: "%a %e %b %Y, %l:%M%P",
-                  valueSuffix: "mV"
-              },
-              xAxis:[
-              {
-                  type: "datetime",
-                  labels: {
-                      format: "{value: %e %b %l%P}",
-                      rotation: -45
-                  },
-                  gridLineWidth: 1,
-              }
-              ],
+              gridLineWidth: 1,
+            },
+          ],
 
-              yAxis: {
-                  title: {
-                      text: "Voltage(mv)"
-                  }
-              },
-              series: [
-              {
-                  name: "Battery Voltage",
-                  color: "#0d6efd",
-                  type: "spline",
-                  data: data,
-              }
-              ],
-              credits: {
-                  enabled: false
-              },
-              accessibility: {
-                  enabled: false
-              }
-
-            });
+          yAxis: {
+            title: {
+              text: "Voltage(mv)",
+            },
+          },
+          series: [
+            {
+              name: "Battery Voltage",
+              color: "#5e81ac",
+              type: "spline",
+              data: data,
+            },
+          ],
+          credits: {
+            enabled: false,
+          },
+          accessibility: {
+            enabled: false,
+          },
+        });
       }
 
-    function setTableEvents(table) {
-        table.on("draw",()=>{
+      function updatePhoto(src, href) {
+        const productDiv = document.getElementById("photo");
+        productDiv.innerHTML = `<a href="${href}"><img src="image/${src}"></a>`;
+      }
+
+      function setTableEvents(table) {
+        table.on("init", () => {
+          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"]);
+       })
+        .on("draw", () => {
           const chartData = getChartData(table);
           createHighCharts(chartData);
         });
-    }
+      }
     </script>
 {% endblock %}
 
