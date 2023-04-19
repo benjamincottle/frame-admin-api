@@ -243,7 +243,10 @@
       function setTableEvents(table) {
         table.on("init", () => {
           updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"]);
-       })
+        })
+        .on('click', 'tr', function() {
+        updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"]);
+        })
         .on("draw", () => {
           const chartData = getChartData(table);
           createHighCharts(chartData);
