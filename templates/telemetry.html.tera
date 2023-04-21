@@ -87,7 +87,6 @@ span[title]:hover:before {
         <table id="data" class="display">
             <thead>
             <tr>
-                <th>Id</th>
                 <th>Timestamp</th>
                 <th>Item Id</th>
                 <th>Product Url</th>                
@@ -135,17 +134,17 @@ span[title]:hover:before {
             },
           },
           columnDefs: [
-            { targets: [0, 2, 3], visible: false },
-            { targets: [0, 1, 4, 6, 7, 8, 9, 10], type: "num" },
-            { targets: [2, 3, 9, 10], defaultContent: "None" },
+            { targets: [1, 2], visible: false },
+            { targets: [0, 3, 5, 6, 7, 8, 9], type: "num" },
+            { targets: [1, 2, 8, 9], defaultContent: "None" },
             {
-              targets: 1,
+              targets: 0,
               render: function (data, type, row, meta) {
                 return moment.unix(data).format("DD-MM-YYYY HH:MM");
               },
             },
             {
-              targets: [5, 11],
+              targets: [4, 10],
               render: function (data, type, row, meta) {
                 return type === "display" && data.length > 13
                   ? '<span ctitle="' + data + '" title="">' + data.substr(0, 8) + "...</span>"
@@ -153,7 +152,7 @@ span[title]:hover:before {
               },
             },
             {
-              targets: 8,
+              targets: 7,
               render: function (data, type, row, meta) {
                 return type === "display"
                   ? '<span ctitle="' + ErrDisplay(data) + '" title="">' + data + "</span>"
@@ -163,7 +162,6 @@ span[title]:hover:before {
 
           ],
           columns: [
-            { data: "id" },
             { data: "ts" },
             { data: "item_id" },
             { data: "product_url" },
