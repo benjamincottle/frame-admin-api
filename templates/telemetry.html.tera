@@ -53,6 +53,7 @@
         max-width: 100%;
         height: auto;
       }
+
     </style>    
 {% endblock %}
 {% block tel_js %}
@@ -246,11 +247,6 @@
         link.href = href;
       }
 
-      function styleDatapoint(pointIndex, style) {
-        let series = Highcharts.charts[0].series[0];
-        series.data[pointIndex].setState(style);
-      }
-
       function setTableEvents(table) {
         table.on("init", () => {
           updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"]);
@@ -258,11 +254,32 @@
         .on('click', 'tr', function() {
           updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"]);
         })
+        .on('dblclick', 'td', function() {
+          var cellData = table.cell(this).data();
+          var tempInput = document.createElement("input");
+          tempInput.style = "position: absolute; left: -1000px; top: -1000px";
+          tempInput.value = cellData;
+          document.body.appendChild(tempInput);
+          tempInput.select();
+          document.execCommand("copy");
+          document.body.removeChild(tempInput);
+          var notice = document.createElement("div");
+          var x = event.clientX - 20;
+          var y = event.clientY - 50;
+          notice.style = "position: absolute; left: " + x + "px; top: " + y + "px; background-color: #d8dee9; color: #2e3440; padding: 5px; border-radius: 5px; font-size: 12px; z-index: 1000";
+          notice.innerHTML = "Copied!";
+          document.body.appendChild(notice);
+          setTimeout(function() { 
+            $(notice).fadeOut(1250, function(){ notice.remove(); });
+          }, 400);
+        })
         .on('mouseover', 'tr', function() {
-           styleDatapoint(table.row(this).index(), "hover");
+           Highcharts.charts[0].series[0].data[table.row(this).index()].setState("hover");
+           Highcharts.charts[0].tooltip.refresh(Highcharts.charts[0].series[0].points[table.row(this).index()]);
         })
         .on('mouseout', 'tr', function() {
-          styleDatapoint(table.row(this).index(), "normal");
+           Highcharts.charts[0].series[0].data[table.row(this).index()].setState("normal");
+           Highcharts.charts[0].tooltip.hide(Highcharts.charts[0].series[0].points[table.row(this).index()]);
         })
         .on("draw", () => {
           renderChartData(table);
