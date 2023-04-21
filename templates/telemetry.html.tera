@@ -53,7 +53,19 @@
         max-width: 100%;
         height: auto;
       }
-
+span[title] {
+    position: relative;
+    z-index: 9999;
+    cursor: text;
+}
+span[title]:hover:before {
+    content: attr(ctitle);
+    background-color: var(--background-color);
+    color: var(--text-color);
+    position: absolute;
+    transform: translateY(-1px);
+    white-space: pre;
+}      
     </style>    
 {% endblock %}
 {% block tel_js %}
@@ -81,7 +93,7 @@
                 <th>Product Url</th>                
                 <th>Chip ID</th>
                 <th>UUID Number</th>
-                <th>Battery Voltage</th>
+                <th>Batt Voltage</th>
                 <th>Boot Code</th>
                 <th>Error Code</th>
                 <th>Return Code</th>
@@ -133,13 +145,22 @@
               },
             },
             {
-              targets: 5,
+              targets: [5, 11],
               render: function (data, type, row, meta) {
-                return type === "display" && data.length > 20
-                  ? '<span title="' + data + '">' + data.substr(0, 18) + "...</span>"
+                return type === "display" && data.length > 13
+                  ? '<span ctitle="' + data + '" title="">' + data.substr(0, 8) + "...</span>"
                   : data;
               },
             },
+            {
+              targets: 8,
+              render: function (data, type, row, meta) {
+                return type === "display"
+                  ? '<span ctitle="' + ErrDisplay(data) + '" title="">' + data + "</span>"
+                  : data;
+              },
+            },
+
           ],
           columns: [
             { data: "id" },
@@ -238,6 +259,53 @@
         });
         dataArray.sort().reverse();
         series.setData(dataArray);
+      }
+
+      function ErrDisplay(code) {
+        const ERROR_LOW_BATTERY = 1;            // Low battery condition
+        const ERROR_WIFI_CONNECT_FAIL = 2;      // Wifi fails to connect
+        const ERROR_WIFISEC_CREATE_FAIL = 4;    // wificlient scure can't be created
+        const ERROR_HTTPS_CONNECT_FAIL = 8;     // HTTPS conection dailfure
+        const ERROR_POST_FAIL_NEGATIVE = 16;    // POST failed negative return code
+        const ERROR_POST_FAIL_NOT_OK = 32;      // POST failed, return code not 200 OK
+        const ERROR_WRONG_NUMBER_BYTES = 64;    // Received wrong number of bytes
+        const ERROR_8 = 128;                    // Reserved
+        let str  = "";
+        for (let i = 1; i <= 128; i *= 2) {
+            if (code & i) {
+                // Error is present in the resultant error value
+                switch (i) {
+                    case ERROR_LOW_BATTERY:
+                        str += "Low Battery\n";
+                        break;
+                    case ERROR_WIFI_CONNECT_FAIL:
+                        str += "Wifi Connect Fail\n";
+                        break;
+                    case ERROR_WIFISEC_CREATE_FAIL:
+                        str += "Wifi Secure Create Fail\n";
+                        break;
+                    case ERROR_HTTPS_CONNECT_FAIL:
+                        str += "HTTPS Connect Fail\n";
+                        break;
+                    case ERROR_POST_FAIL_NEGATIVE:
+                        str += "POST Fail Negative\n";
+                        break;
+                    case ERROR_POST_FAIL_NOT_OK:
+                        str += "POST Fail Not Ok\n";
+                        break;
+                    case ERROR_WRONG_NUMBER_BYTES:
+                        str += "Wrong Number Bytes\n";              
+                        break;
+                    case ERROR_8:
+                        str += "Reserved\n";      
+                        break;
+                    default:
+                        str += "Unknown Error\n";
+                        break;
+                }
+            }
+        }
+        return str;
       }
 
       function updatePhoto(src, href, code) {
