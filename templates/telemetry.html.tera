@@ -240,7 +240,7 @@
         series.setData(dataArray);
       }
 
-      function updatePhoto(src, href) {
+      function updatePhoto(src, href, code) {
         const lnk = document.getElementById("link");
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
@@ -251,20 +251,22 @@
           canvas.height = main_img.height;
           ctx.drawImage(main_img, 0, 0) 
           let low_batt_img = new Image();
-          low_batt_img.addEventListener("load", () => { 
-            ctx.drawImage(low_batt_img, 6, 10) 
-          }, false);
-          low_batt_img.src = "low_batt.jpg";    
+          if (code & 1 == 1) {
+            low_batt_img.addEventListener("load", () => { 
+              ctx.drawImage(low_batt_img, 6, 10) 
+            }, false);
+            low_batt_img.src = "low_batt.jpg";    
+          }
         }, false);
         main_img.src = "image/" + src;
       }
 
       function setTableEvents(table) {
         table.on("init", () => {
-          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"]);
+          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"], table.rows(0).data()[0]["error_code"]);
         })
         .on('click', 'tr', function() {
-          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"]);
+          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"], table.row(this).data()["error_code"]);
         })
         .on('dblclick', 'td', function() {
           var cellData = table.cell(this).data();
@@ -276,8 +278,8 @@
           document.execCommand("copy");
           document.body.removeChild(tempInput);
           var notice = document.createElement("div");
-          var x = event.clientX - 20;
-          var y = event.clientY - 50;
+          var x = event.pageX - 20;
+          var y = event.pageY - 50;
           notice.style = "position: absolute; left: " + x + "px; top: " + y + "px; background-color: #d8dee9; color: #2e3440; padding: 5px; border-radius: 5px; font-size: 12px; z-index: 1000";
           notice.innerHTML = "Copied!";
           document.body.appendChild(notice);
