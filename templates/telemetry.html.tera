@@ -67,7 +67,6 @@
           <div>
             <a href ="#" id="link" target="_">
               <canvas id="photo"></canvas>
-              <img id="photosrc" src="#" style="display:none">
             </a>
           </div>
           <div id="chart" class="grow"></div>
@@ -242,17 +241,22 @@
       }
 
       function updatePhoto(src, href) {
-        const img = document.getElementById("photosrc");
         const lnk = document.getElementById("link");
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
-        img.src = "image/" + src;
         lnk.href = href;
-        img.onload = function() {
-          canvas.width = img.width;
-          canvas.height = img.height;
-          ctx.drawImage(img, 0, 0);
-        }
+        let main_img = new Image();
+        main_img.addEventListener("load", () => { 
+          canvas.width = main_img.width;
+          canvas.height = main_img.height;
+          ctx.drawImage(main_img, 0, 0) 
+          let low_batt_img = new Image();
+          low_batt_img.addEventListener("load", () => { 
+            ctx.drawImage(low_batt_img, 6, 10) 
+          }, false);
+          low_batt_img.src = "low_batt.jpg";    
+        }, false);
+        main_img.src = "image/" + src;
       }
 
       function setTableEvents(table) {
