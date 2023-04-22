@@ -2,60 +2,61 @@
 
 {% block content %}
 <script>
-  function getStatus(taskID) {
-    fetch(`/frame_admin/task/${taskID}`, {
+  function updateTasks() {
+    fetch('/frame_admin/task_board', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
       },
     })
     .then(response => response.json())
-    .then(res => {
-      const html = `
-        <tr>
-          <td>${taskID}</td>
-          <td>${res.task_action}</td>
-          <td>${res.task_status}</td>
-        </tr>`;
-      const existingRow = document.getElementById(taskID);
-      existingRow.innerHTML = html;
-      const taskStatus = res.task_status;
-      if (taskStatus === 'Completed' || taskStatus === 'Failed') return false;
+    .then(task_board => {
+      if (task_board.next_task_id == 0) {
+        const html = `
+          <tr>
+            <td>-</td>
+            <td>DB up to date</td>
+            <td>No Changes</td>
+          </tr>`;
+        const newRow = document.getElementById('tasks').insertRow();
+        newRow.innerHTML = html;
+        return false;
+      }
+      let task_in_progress = false;
+      for (const task_id in task_board.tasks) {
+        const html = `
+          <tr>
+            <td>${task_id}</td>
+            <td>${task_board.tasks[task_id].action}</td>
+            <td>${task_board.tasks[task_id].status}</td>
+          </tr>`;
+        if (document.getElementById(task_id) != null) {
+          const existingRow = document.getElementById(task_id);
+          existingRow.innerHTML = html;
+        } else {
+          const newRow = document.getElementById('tasks').insertRow();
+          newRow.innerHTML = html;
+          newRow.id = task_id;
+        };
+        if ( `${task_board.tasks[task_id].status}` == "InProgress" || `${task_board.tasks[task_id].status}` == "Pending" )  {
+          task_in_progress = true;
+        }
+      }
+      if (task_in_progress  === false ) {
+        return false;
+      }
       setTimeout(function() {
-        getStatus(res.task_id);
+        updateTasks();
       }, 500);
     })
     .catch(err => console.log(err));
-  }
-
+  };
   window.onload = function() {
-    if (({{ task_queue | json_encode(pretty=true) | safe }}).length == 0) {
-      const html = `
-        <tr>
-          <td>-</td>
-          <td>DB up to date</td>
-          <td>No Changes</td>
-        </tr>`;
-        const newRow = document.getElementById('tasks').insertRow(0);
-        newRow.innerHTML = html;
-    } else {
-      const html = `
-        <tr>
-          <td></td>
-          <td></td>
-          <td></td>
-        </tr>`;
-      for (const task_id of {{ task_queue | reverse | json_encode(pretty=true) | safe }}) {
-        const newRow = document.getElementById('tasks').insertRow(0);
-        newRow.innerHTML = html;
-        newRow.id = task_id;
-        getStatus(task_id);
-      }
-    }
-  }
+    updateTasks();
+  };
 </script>
   <div class="layout">
-    <table>
+    <table style="width: 400px;">
       <thead>
         <tr>
           <th>Task Id</th>
