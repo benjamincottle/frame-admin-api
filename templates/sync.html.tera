@@ -3,7 +3,7 @@
 {% block content %}
 <script>
   function updateTasks() {
-    fetch('/frame_admin/task_board', {
+    fetch('/frame_admin/tasks', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json'
