@@ -40,6 +40,8 @@
     <section class="layout">
       <div>
         <a href="{{ url_for(name='index') }}"><button type="button">Index</button></a>
+        <a href="{{ url_for(name='login') }}"><button type="button">Login</button></a>
+        <a href="{{ url_for(name='logout') }}"><button type="button">Logout</button></a>
         <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
         <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
         <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
