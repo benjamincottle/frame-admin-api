@@ -3,7 +3,7 @@ use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
 use uuid::Uuid;
 
 use crate::{
-    google_oauth::{get_google_user, request_token, Credentials},
+    google_oauth::{get_google_user, request_token, ValidUser, Credentials, AuthError, AuthGuard},
     gphotos_api::{get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims, User},
@@ -31,6 +31,12 @@ use tera::Context;
 use tiny_http::{Header, Request, Response};
 use url::Url;
 
+struct AppContext {
+    app_data: AppState, 
+    request: Request, 
+    auth_guard: AuthGuard<ValidUser>
+}
+
 pub fn route_request(app_data: AppState, request: Request) {
     let url = match Url::parse("http://localhost:5000")
         .expect("This should never fail")
@@ -50,8 +56,8 @@ pub fn route_request(app_data: AppState, request: Request) {
     let url = url.path().trim_end_matches("/");
     let mut router = Router::new();
     router.add("/frame_admin", "index".to_string());
-    router.add("/frame_admin/auth/login", "login".to_string());
-    router.add("/frame_admin/auth/logout", "logout".to_string());
+    router.add("/frame_admin/login", "login".to_string());
+    router.add("/frame_admin/logout", "logout".to_string());
     router.add("/frame_admin/sync", "sync".to_string());
     router.add("/frame_admin/authorise", "authorise".to_string());
     router.add("/frame_admin/oauth2callback", "oauth2callback".to_string());
@@ -68,15 +74,18 @@ pub fn route_request(app_data: AppState, request: Request) {
             return;
         }
     };
+    let auth_guard: AuthGuard<ValidUser> = ValidUser::from_request(&app_data, &request);
     match matched.handler().as_str() {
         "index" => {
-            handle_index(app_data, request);
+            handle_index(app_data, request, auth_guard);
         }
         "login" => {
-            handle_login(app_data, request);
+            if let Some(err) = handle_login(app_data, request).err() {
+                log::error!("[Error] (route_request) login route failed: {}", err);
+            };
         }
         "logout" => {
-            handle_logout(app_data, request);
+            handle_logout(app_data, request, auth_guard);
         }
         "sync" => {
             if let Some(err) = handle_sync(request).err() {
@@ -87,13 +96,13 @@ pub fn route_request(app_data: AppState, request: Request) {
             handle_authorise(request);
         }
         "oauth2callback" => {
-            handle_oauth2callback(request);
+            handle_oauth2callback(app_data, request);
         }
         "telemetry" => {
-            handle_telemetry(request);
+            handle_telemetry(request, auth_guard);
         }
         "telemetry_data" => {
-            if let Some(err) = handle_telemetry_data(request).err() {
+            if let Some(err) = handle_telemetry_data(request, auth_guard).err() {
                 log::error!(
                     "[Error] (route_request) telemetry_data route failed: {}",
                     err
@@ -117,40 +126,63 @@ pub fn route_request(app_data: AppState, request: Request) {
     }
 }
 
-fn handle_login(app_data: AppState, request: Request) {
+fn handle_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(e) = SESSION_MGR.get_session_id(&request).err() {
-        log::info!("session error: {:?}", e);
+        log::info!("[Info] (handle_login) session error: {:?}", e);
+        println!("next_uri= {}", request.url());
         // let next_uri = request.url();
-        let next_uri = "index";
+        let next_uri = "/frame_admin";
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
         let mut response = Response::empty(tiny_http::StatusCode(302));
         response
-            .add_header(Header::from_str("Location: ../authorise").expect("This should never fail"));
+            .add_header(Header::from_str("Location: authorise").expect("This should never fail"));
         response.add_header(
-            Header::from_str(&format!("Set-Cookie: session_id={}", session_id))
-                .expect("This should never fail"),
+            Header::from_str(&format!(
+                "Set-Cookie: session={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                session_id,
+                app_data.env.jwt_max_age * 60
+            ))
+            .expect("This should never fail"),
         );
         dispatch_response(request, response);
-    }    
+        return Ok(());
+    }
+    assert!(false, "I'm not sure that I should be able to get down here");
+    let mut response = Response::empty(tiny_http::StatusCode(302));
+    response
+        .add_header(Header::from_str("Location: /frame_admin").expect("This should never fail"));
+    dispatch_response(request, response);
+    Ok(())
 }
 
-fn handle_logout(app_data: AppState, request: Request) {
+fn handle_logout(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let mut response = Response::empty(tiny_http::StatusCode(302));
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: token=\"\"; Path=/ Max-Age={}; HttpOnly",
-            Duration::seconds(-1)
-        ))
-        .expect("This should never fail"),
-    );
-    response.add_header(
-        Header::from_str("Location: index").expect("This should never fail"),
-    );
+    match auth_guard {
+        Ok(user) => {
+            response.add_header(
+                Header::from_str(&format!(
+                    "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                    Duration::seconds(-1)
+                ))
+                .expect("This should never fail"),
+            );
+            response.add_header(
+                Header::from_str(&format!(
+                    "Set-Cookie: session=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                    Duration::seconds(-1)
+                ))
+                .expect("This should never fail"),
+            );
+        }
+        Err(_) => {}
+    };
+    response
+        .add_header(Header::from_str("Location: /frame_admin").expect("This should never fail"));
     dispatch_response(request, response);
 }
 
-fn handle_google_oauth(app_data: AppState, request: Request) {
+fn handle_oauth2callback(app_data: AppState, request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
@@ -247,9 +279,9 @@ fn handle_google_oauth(app_data: AppState, request: Request) {
     let mut response = Response::empty(tiny_http::StatusCode(302));
     response.add_header(
         Header::from_str(&format!(
-            "Set-Cookie: token={}; Path=/ Max-Age={}; HttpOnly",
+            "Set-Cookie: token={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
             token,
-            Duration::seconds(app_data.env.jwt_max_age * 60)
+            app_data.env.jwt_max_age * 60
         ))
         .expect("This should never fail"),
     );
@@ -414,9 +446,15 @@ fn handle_image(request: Request, params: &Params) -> Result<(), Box<dyn std::er
     Ok(())
 }
 
-fn handle_index(app_data: AppState, request: Request) {
-    let mut context = Context::new();
-    context.insert("message", "Hello world!");
+fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+    let context = match auth_guard {
+        Ok(user) => {
+            let mut context = Context::new();
+            context.insert("user","logged_in");
+            context
+        },
+        Err(_) => Context::new(),
+    };
     let rendered = TEMPLATES.render("index.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -445,7 +483,7 @@ fn handle_sync(request: Request) -> Result<(), Box<dyn std::error::Error>> {
         response
             .add_header(Header::from_str("Location: authorise").expect("This should never fail"));
         response.add_header(
-            Header::from_str(&format!("Set-Cookie: session_id={}", session_id))
+            Header::from_str(&format!("Set-Cookie: session={}", session_id))
                 .expect("This should never fail"),
         );
         dispatch_response(request, response);
@@ -625,7 +663,7 @@ fn handle_authorise(request: Request) {
     dispatch_response(request, response);
 }
 
-fn handle_oauth2callback(request: Request) {
+fn handle_oauth2callback_old(request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
@@ -675,13 +713,34 @@ fn handle_oauth2callback(request: Request) {
     dispatch_response(request, response);
 }
 
-fn handle_telemetry(request: Request) {
-    let rendered = TEMPLATES.render("telemetry.html.tera", &Context::new());
-    let response = Response::from_data(rendered);
-    dispatch_response(request, response);
+fn handle_telemetry(request: Request, auth_guard: AuthGuard<ValidUser>) {
+    match auth_guard {
+        Ok(_) => {
+            let mut context = Context::new();
+            context.insert("user","logged_in");
+            let rendered = TEMPLATES.render("telemetry.html.tera", &context);
+            let response = Response::from_data(rendered);
+            dispatch_response(request, response);
+        },
+        Err(_) => {
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
+        }
+    };
 }
 
-fn handle_telemetry_data(request: Request) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_telemetry_data(request: Request, auth_guard: AuthGuard<ValidUser>) -> Result<(), Box<dyn std::error::Error>> {
+    match auth_guard {
+        Ok(_) => {},
+        Err(_) => {
+            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            return Ok(());
+        }
+    };
     let params = extract_params(request.url());
     let offset = params
         .get("start")
@@ -757,7 +816,7 @@ fn handle_revoke(request: Request) {
                 Header::from_str("Location: authorise").expect("This should never fail"),
             );
             response.add_header(
-                Header::from_str(&format!("Set-Cookie: session_id={}", session_id))
+                Header::from_str(&format!("Set-Cookie: session={}", session_id))
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);

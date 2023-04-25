@@ -43,9 +43,9 @@ impl SESSION_MGR {
             .to_string();
         let session_id = cookie
             .split(';')
-            .find(|cookie| cookie.starts_with("session_id="))
+            .find(|cookie| cookie.starts_with("session="))
             .ok_or(SessionError::InvalidCookie)?
-            .trim_start_matches("session_id=");
+            .trim_start_matches("session=");
         if let Some(session) = session_mgr.sessions.get(session_id) {
             if session.expires > SystemTime::now() {
                 Ok(session_id.to_string())

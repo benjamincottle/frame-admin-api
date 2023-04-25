@@ -21,8 +21,8 @@ lazy_static! {
         let urls = {
             let mut urls = BTreeMap::new();
             urls.insert("index".to_string(), "/frame_admin".to_string());
-            urls.insert("login".to_string(), "/frame_admin/auth/login".to_string());
-            urls.insert("logout".to_string(), "/frame_admin/auth/logout".to_string());
+            urls.insert("login".to_string(), "/frame_admin/login".to_string());
+            urls.insert("logout".to_string(), "/frame_admin/logout".to_string());
             urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
             urls.insert(
                 "telemetry".to_string(),

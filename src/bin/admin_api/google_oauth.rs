@@ -1,3 +1,4 @@
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -6,8 +7,9 @@ use std::{
     io::{BufReader, BufWriter},
     time::{SystemTime, UNIX_EPOCH},
 };
+use tiny_http::Request;
 
-use crate::model::AppState;
+use crate::model::{AppState, TokenClaims};
 
 #[derive(Deserialize, Serialize)]
 pub struct Credentials {
@@ -191,9 +193,7 @@ pub fn request_token(
     }
 }
 
-pub fn get_google_user(
-    access_token: &str,
-) -> Result<GoogleUserResult, Box<dyn Error>> {
+pub fn get_google_user(access_token: &str) -> Result<GoogleUserResult, Box<dyn Error>> {
     let response = ureq::get("https://www.googleapis.com/oauth2/v1/userinfo?alt=json")
         .set("Content-Type", "application/json")
         .set("Authorization", format!("Bearer {}", access_token).as_str())
@@ -205,5 +205,77 @@ pub fn get_google_user(
     } else {
         let message = "An error occurred while trying to retrieve user information.";
         Err(From::from(message))
+    }
+}
+
+#[derive(Serialize)]
+pub enum AuthError {
+    MissingToken,
+    InvalidToken,
+}
+
+pub type AuthGuard<T> = Result<T, AuthError>;
+
+#[derive(Serialize)]
+pub struct ValidUser {
+    pub user_id: String,
+}
+
+impl ValidUser {
+    pub fn from_request(app_data: &AppState, request: &Request) -> AuthGuard<ValidUser> {
+        let token = request
+            .headers()
+            .iter()
+            .find(|header| header.field.equiv("Cookie"))
+            .and_then(|h| {
+                h.value
+                    .as_str()
+                    .split(';')
+                    .find(|cookie| cookie.trim().starts_with("token="))
+                    .and_then(|c| Some(c.trim().trim_start_matches("token=")))
+            })
+            .or_else(|| {
+                request
+                    .headers()
+                    .iter()
+                    .find(|header| header.field.equiv("Authorization"))
+                    .and_then(|c| {
+                        let t = c.value.as_str().trim_start_matches("Bearer ");
+                        Some(t)
+                    })
+            });
+        if token.is_none() {
+            log::warn!("Missing token, user not logged in");
+            return Err(AuthError::MissingToken);
+        }
+        let token = token.unwrap();
+        let jwt_secret = app_data.env.jwt_secret.to_owned();
+        let decode = decode::<TokenClaims>(
+            token,
+            &DecodingKey::from_secret(jwt_secret.as_ref()),
+            &Validation::new(Algorithm::HS256),
+        );
+
+        match decode {
+            Ok(token) => {
+                let vec = app_data.db.lock().unwrap();
+                let user = vec
+                    .iter()
+                    .find(|user| user.id == Some(token.claims.sub.to_owned()));
+
+                if user.is_none() {
+                    log::warn!("User belonging to this token no longer exists");
+                    return Err(AuthError::InvalidToken);
+                }
+
+                Ok(ValidUser {
+                    user_id: token.claims.sub,
+                })
+            }
+            Err(_) => {
+                log::warn!("Invalid token or user doesn't exist");
+                return Err(AuthError::InvalidToken);
+            }
+        }
     }
 }

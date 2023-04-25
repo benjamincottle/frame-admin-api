@@ -2,6 +2,6 @@
 
 {% block content %}
           <div class="layout">
-            {{ message }}
+            <p>Hello world!</p>
           </div>
 {% endblock %}
