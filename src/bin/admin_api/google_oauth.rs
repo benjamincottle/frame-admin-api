@@ -12,8 +12,8 @@ use tiny_http::Request;
 use crate::model::{AppState, TokenClaims};
 
 #[derive(Deserialize, Serialize)]
-pub struct Credentials {
-    pub access_token: Option<String>,
+struct Credentials {
+    access_token: Option<String>,
     expires_in: Option<u64>,
     id_token: Option<String>,
     refresh_token: Option<String>,
@@ -43,7 +43,7 @@ impl Credentials {
         Ok(())
     }
 
-    pub fn load() -> Self {
+    fn load() -> Self {
         let credentials = match File::open("secrets/token.json") {
             Ok(file) => {
                 let reader = BufReader::new(file);
@@ -54,7 +54,7 @@ impl Credentials {
         credentials
     }
 
-    pub fn expired(&self) -> bool {
+    fn expired(&self) -> bool {
         match self.expires_in {
             Some(expires_in) => {
                 let now = SystemTime::now()
@@ -67,7 +67,7 @@ impl Credentials {
         }
     }
 
-    pub fn retrieve_tokens(&self, code: &str) -> Result<Self, ureq::Error> {
+    fn retrieve_tokens(&self, code: &str) -> Result<Self, ureq::Error> {
         let response = ureq::post("https://oauth2.googleapis.com/token")
             .set("Content-Type", "application/x-www-form-urlencoded")
             .send_string(&format!(
@@ -104,7 +104,7 @@ impl Credentials {
         Ok(credentials)
     }
 
-    pub fn refresh_access_token(&self) -> Result<Self, ureq::Error> {
+    fn refresh_access_token(&self) -> Result<Self, ureq::Error> {
         let refresh_token = self
             .refresh_token
             .clone()
@@ -153,10 +153,14 @@ impl Credentials {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct OAuthResponse {
     pub access_token: String,
-    pub id_token: String,
+    pub expires_in: u64,
+    pub id_token: Option<String>,
+    pub scope: String,
+    pub token_type: String,
+    pub refresh_token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -172,8 +176,8 @@ pub struct GoogleUserResult {
 }
 
 pub fn request_token(
-    authorization_code: &str,
     app_data: &AppState,
+    authorization_code: &str,
 ) -> Result<OAuthResponse, Box<dyn Error>> {
     let redirect_url = app_data.env.google_oauth_redirect_url.to_owned();
     let client_secret = app_data.env.google_oauth_client_secret.to_owned();
@@ -193,6 +197,36 @@ pub fn request_token(
     }
 }
 
+pub fn refresh_token(
+    app_data: &AppState,
+    refresh_token: &str,
+) -> Result<OAuthResponse, Box<dyn Error>> {
+    let client_secret = app_data.env.google_oauth_client_secret.to_owned();
+    let client_id = app_data.env.google_oauth_client_id.to_owned();
+    let response = ureq::post("https://oauth2.googleapis.com/token")
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .send_string(&format!(
+            "client_id={}&client_secret={}&grant_type=refresh_token&refresh_token={}",
+            client_id,
+            client_secret,
+            refresh_token
+        ));
+    if response.is_ok() {
+        let oauth_response = response.unwrap().into_json::<OAuthResponse>()?;
+        Ok(oauth_response)
+    } else {
+        let message = "An error occurred while trying to refresh the access token";
+        Err(From::from(message))
+    }
+}
+
+pub fn revoke_token(access_token: &str) -> Result<(), ureq::Error> {
+    ureq::post("https://oauth2.googleapis.com/revoke")
+        .set("Content-Type", "application/x-www-form-urlencoded")
+        .send_string(&format!("token={}", access_token))?;
+    Ok(())
+}
+
 pub fn get_google_user(access_token: &str) -> Result<GoogleUserResult, Box<dyn Error>> {
     let response = ureq::get("https://www.googleapis.com/oauth2/v1/userinfo?alt=json")
         .set("Content-Type", "application/json")
@@ -208,7 +242,7 @@ pub fn get_google_user(access_token: &str) -> Result<GoogleUserResult, Box<dyn E
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub enum AuthError {
     MissingToken,
     InvalidToken,
@@ -261,7 +295,7 @@ impl ValidUser {
                 let vec = app_data.db.lock().unwrap();
                 let user = vec
                     .iter()
-                    .find(|user| user.id == Some(token.claims.sub.to_owned()));
+                    .find(|user| user.id == token.claims.sub.to_owned());
 
                 if user.is_none() {
                     log::warn!("User belonging to this token no longer exists");

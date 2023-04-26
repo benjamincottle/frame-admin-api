@@ -2,21 +2,19 @@ use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
-use crate::config;
+use crate::{config, google_oauth::OAuthResponse};
 
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct User {
-    pub id: Option<String>,
+    pub id: String,
     pub name: String,
     pub email: String,
-    pub password: String,
-    pub role: String,
+    pub credentials: OAuthResponse,
     pub photo: String,
     pub verified: bool,
-    pub provider: String,
-    pub createdAt: Option<DateTime<Utc>>,
-    pub updatedAt: Option<DateTime<Utc>>,
+    pub createdAt: DateTime<Utc>,
+    pub updatedAt: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,20 +40,20 @@ pub struct TokenClaims {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct QueryCode {
-    pub code: String,
-    pub state: String,
+struct QueryCode {
+    code: String,
+    state: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct RegisterUserSchema {
-    pub name: String,
-    pub email: String,
-    pub password: String,
+struct RegisterUserSchema {
+    name: String,
+    email: String,
+    password: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct LoginUserSchema {
-    pub email: String,
-    pub password: String,
+struct LoginUserSchema {
+    email: String,
+    password: String,
 }
