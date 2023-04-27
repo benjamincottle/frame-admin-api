@@ -4,7 +4,7 @@ use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
 use crate::{
     google_oauth::{
         get_google_user, refresh_token, request_token, revoke_token, AuthGuard, JWTParser,
-        OAuthResponse, ValidUser,
+        OAuthCreds, ValidUser,
     },
     gphotos_api::{get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
@@ -290,7 +290,7 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
             Some(refresh_token) => Some(refresh_token),
             None => user.credentials.refresh_token.clone(),
         };
-        user.credentials = OAuthResponse {
+        user.credentials = OAuthCreds {
             access_token: token_response.access_token,
             expires_in,
             id_token: token_response.id_token,
@@ -306,7 +306,7 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
             name: google_user.name,
             email,
             verified: google_user.verified_email,
-            credentials: OAuthResponse {
+            credentials: OAuthCreds {
                 access_token: token_response.access_token,
                 expires_in,
                 id_token: token_response.id_token,

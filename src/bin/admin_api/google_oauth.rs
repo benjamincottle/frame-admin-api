@@ -11,7 +11,7 @@ use std::{
 use tiny_http::Request;
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
-pub struct OAuthResponse {
+pub struct OAuthCreds {
     pub access_token: String,
     pub expires_in: u64,
     pub id_token: Option<String>,
@@ -35,7 +35,7 @@ pub struct GoogleUserResult {
 pub fn request_token(
     app_data: &AppState,
     authorization_code: &str,
-) -> Result<OAuthResponse, Box<dyn Error>> {
+) -> Result<OAuthCreds, Box<dyn Error>> {
     let redirect_url = app_data.env.google_oauth_redirect_url.to_owned();
     let client_secret = app_data.env.google_oauth_client_secret.to_owned();
     let client_id = app_data.env.google_oauth_client_id.to_owned();
@@ -46,8 +46,8 @@ pub fn request_token(
             client_id, client_secret, authorization_code, redirect_url
         ));
     if response.is_ok() {
-        let oauth_response = response.unwrap().into_json::<OAuthResponse>()?;
-        Ok(oauth_response)
+        let oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
+        Ok(oauth_creds)
     } else {
         let message = "An error occurred while trying to retrieve the access token";
         Err(From::from(message))
@@ -57,7 +57,7 @@ pub fn request_token(
 pub fn refresh_token(
     app_data: &AppState,
     refresh_token: &str,
-) -> Result<OAuthResponse, Box<dyn Error>> {
+) -> Result<OAuthCreds, Box<dyn Error>> {
     let client_secret = app_data.env.google_oauth_client_secret.to_owned();
     let client_id = app_data.env.google_oauth_client_id.to_owned();
     let response = ureq::post("https://oauth2.googleapis.com/token")
@@ -67,8 +67,8 @@ pub fn refresh_token(
             client_id, client_secret, refresh_token
         ));
     if response.is_ok() {
-        let oauth_response = response.unwrap().into_json::<OAuthResponse>()?;
-        Ok(oauth_response)
+        let oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
+        Ok(oauth_creds)
     } else {
         let message = "An error occurred while trying to refresh the access token";
         Err(From::from(message))
