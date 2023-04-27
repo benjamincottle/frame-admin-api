@@ -1,160 +1,14 @@
-use chrono::Duration;
+use crate::model::{AppState, TokenClaims};
+
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    env,
     error::Error,
-    fs::{remove_file, File},
-    io::{BufReader, BufWriter},
     sync::{Arc, Mutex},
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::Instant,
 };
 use tiny_http::Request;
-
-use crate::model::{AppState, TokenClaims};
-
-#[derive(Deserialize, Serialize)]
-struct Credentials {
-    access_token: Option<String>,
-    expires_in: Option<u64>,
-    id_token: Option<String>,
-    refresh_token: Option<String>,
-    scope: Option<String>,
-    token_type: Option<String>,
-}
-
-impl Default for Credentials {
-    fn default() -> Self {
-        Credentials {
-            access_token: None,
-            expires_in: None,
-            id_token: None,
-            refresh_token: None,
-            scope: None,
-            token_type: None,
-        }
-    }
-}
-
-// TODO create custom error enum for token errors
-impl Credentials {
-    fn save(&self) -> std::io::Result<()> {
-        let file = File::create("secrets/token.json")?;
-        let writer = BufWriter::new(file);
-        ureq::serde_json::to_writer(writer, self)?;
-        Ok(())
-    }
-
-    fn load() -> Self {
-        let credentials = match File::open("secrets/token.json") {
-            Ok(file) => {
-                let reader = BufReader::new(file);
-                ureq::serde_json::from_reader(reader).expect("Unable to parse JSON")
-            }
-            Err(_error) => Credentials::default(),
-        };
-        credentials
-    }
-
-    fn expired(&self) -> bool {
-        match self.expires_in {
-            Some(expires_in) => {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs();
-                now > expires_in
-            }
-            None => true,
-        }
-    }
-
-    fn retrieve_tokens(&self, code: &str) -> Result<Self, ureq::Error> {
-        let response = ureq::post("https://oauth2.googleapis.com/token")
-            .set("Content-Type", "application/x-www-form-urlencoded")
-            .send_string(&format!(
-            "client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri={}",
-            &env::var("GOOGLE_OAUTH_CLIENT_ID").expect("This should never fail"),
-            &env::var("GOOGLE_OAUTH_CLIENT_SECRET").expect("This should never fail"),
-            code,
-            &env::var("GOOGLE_OAUTH_REDIRECT_URI").expect("This should never fail")
-        ))?;
-        let new_credentials: Credentials = response.into_json()?;
-        let refresh_token = match new_credentials.refresh_token {
-            Some(refresh_token) => Some(refresh_token),
-            None => self.refresh_token.clone(),
-        };
-        let expires_in = match new_credentials.expires_in {
-            Some(expires_in) => {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs();
-                Some(now + expires_in)
-            }
-            None => None,
-        };
-        let credentials = Credentials {
-            access_token: new_credentials.access_token,
-            expires_in,
-            id_token: new_credentials.id_token,
-            refresh_token,
-            scope: new_credentials.scope,
-            token_type: new_credentials.token_type,
-        };
-        credentials.save()?;
-        Ok(credentials)
-    }
-
-    fn refresh_access_token(&self) -> Result<Self, ureq::Error> {
-        let refresh_token = self
-            .refresh_token
-            .clone()
-            .expect("current_credentials should contain a refresh_token");
-        let response = ureq::post("https://oauth2.googleapis.com/token")
-            .set("Content-Type", "application/x-www-form-urlencoded")
-            .send_string(&format!(
-                "client_id={}&client_secret={}&grant_type=refresh_token&refresh_token={}",
-                &env::var("GOOGLE_OAUTH_CLIENT_ID").expect("This should never fail"),
-                &env::var("GOOGLE_OAUTH_CLIENT_SECRET").expect("This should never fail"),
-                refresh_token
-            ))?;
-        let new_credentials: Credentials = response.into_json()?;
-        let expires_in = match new_credentials.expires_in {
-            Some(expires_in) => {
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("Time went backwards")
-                    .as_secs();
-                Some(now + expires_in)
-            }
-            None => None,
-        };
-        let credentials = Credentials {
-            access_token: new_credentials.access_token,
-            expires_in,
-            id_token: new_credentials.id_token,
-            refresh_token: Some(refresh_token),
-            scope: new_credentials.scope,
-            token_type: new_credentials.token_type,
-        };
-        credentials.save()?;
-        Ok(credentials)
-    }
-
-    pub fn revoke(&self) -> Result<(), ureq::Error> {
-        let access_token = self
-            .access_token
-            .clone()
-            .expect("current_credentials should contain an access_token");
-        ureq::post("https://oauth2.googleapis.com/revoke")
-            .set("Content-Type", "application/x-www-form-urlencoded")
-            .send_string(&format!("token={}", access_token))?;
-        remove_file("token.json")?;
-        Ok(())
-    }
-}
 
 #[derive(Deserialize, Debug, Clone, Serialize)]
 pub struct OAuthResponse {
@@ -315,6 +169,8 @@ impl ValidUser {
     }
 }
 
+// JWT Stuff
+
 #[derive(Deserialize, Clone)]
 pub struct GoogleKeys {
     keys: Vec<GoogleKey>,
@@ -336,39 +192,35 @@ pub enum GoogleKeyProviderError {
 }
 
 #[derive(Debug)]
-pub enum ParserError {
+pub enum JWTParserError {
     WrongHeader,
     UnknownKid,
     KeyProvider(GoogleKeyProviderError),
     WrongToken(jsonwebtoken::errors::Error),
 }
 
-pub struct Parser {
+pub struct JWTParser {
     client_id: String,
     key_provider: Arc<Mutex<GooglePublicKeyProvider>>,
 }
 
-impl Parser {
+impl JWTParser {
     pub fn new(client_id: &str) -> Result<Self, Box<dyn Error>> {
         let oidc_config_url = "https://accounts.google.com/.well-known/openid-configuration";
         let oidc_config_resp = ureq::get(oidc_config_url).call()?;
         let oidc_config: ureq::serde_json::Value = oidc_config_resp.into_json()?;
         let jwks_uri = oidc_config["jwks_uri"].as_str().unwrap();
-        Ok(Parser::new_with_custom_cert_url(client_id, jwks_uri))
-    }
-
-    pub fn new_with_custom_cert_url(client_id: &str, public_key_url: &str) -> Self {
-        Self {
+        Ok(Self {
             client_id: client_id.to_owned(),
-            key_provider: Arc::new(Mutex::new(GooglePublicKeyProvider::new(public_key_url))),
-        }
+            key_provider: Arc::new(Mutex::new(GooglePublicKeyProvider::new(jwks_uri))),
+        })
     }
 
-    pub fn parse<T: DeserializeOwned>(&self, token: &str) -> Result<T, ParserError> {
+    pub fn parse<T: DeserializeOwned>(&self, token: &str) -> Result<T, JWTParserError> {
         let mut provider = self.key_provider.lock().unwrap();
         match jsonwebtoken::decode_header(token) {
             Ok(header) => match header.kid {
-                None => Result::Err(ParserError::UnknownKid),
+                None => Result::Err(JWTParserError::UnknownKid),
                 Some(kid) => match provider.get_key(kid.as_str()) {
                     Ok(key) => {
                         let aud = vec![self.client_id.to_owned()];
@@ -383,16 +235,16 @@ impl Parser {
                         let result = jsonwebtoken::decode::<T>(token, &key, &validation);
                         match result {
                             Result::Ok(token_data) => Result::Ok(token_data.claims),
-                            Result::Err(error) => Result::Err(ParserError::WrongToken(error)),
+                            Result::Err(error) => Result::Err(JWTParserError::WrongToken(error)),
                         }
                     }
                     Err(e) => {
-                        let error = ParserError::KeyProvider(e);
+                        let error = JWTParserError::KeyProvider(e);
                         Result::Err(error)
                     }
                 },
             },
-            Err(_) => Result::Err(ParserError::WrongHeader),
+            Err(_) => Result::Err(JWTParserError::WrongHeader),
         }
     }
 }
@@ -461,12 +313,144 @@ impl GooglePublicKeyProvider {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct IdentityTokenClaims {
-    pub email: String,
-    pub aud: String,
-    pub iss: String,
-    pub exp: u64,
-    pub iat: u64,
-    pub sub: String,
-}
+// #[derive(Deserialize, Serialize)]
+// struct Credentials {
+//     access_token: Option<String>,
+//     expires_in: Option<u64>,
+//     id_token: Option<String>,
+//     refresh_token: Option<String>,
+//     scope: Option<String>,
+//     token_type: Option<String>,
+// }
+
+// impl Default for Credentials {
+//     fn default() -> Self {
+//         Credentials {
+//             access_token: None,
+//             expires_in: None,
+//             id_token: None,
+//             refresh_token: None,
+//             scope: None,
+//             token_type: None,
+//         }
+//     }
+// }
+
+// // TODO create custom error enum for token errors
+// impl Credentials {
+//     fn save(&self) -> std::io::Result<()> {
+//         let file = File::create("secrets/token.json")?;
+//         let writer = BufWriter::new(file);
+//         ureq::serde_json::to_writer(writer, self)?;
+//         Ok(())
+//     }
+
+//     fn load() -> Self {
+//         let credentials = match File::open("secrets/token.json") {
+//             Ok(file) => {
+//                 let reader = BufReader::new(file);
+//                 ureq::serde_json::from_reader(reader).expect("Unable to parse JSON")
+//             }
+//             Err(_error) => Credentials::default(),
+//         };
+//         credentials
+//     }
+
+//     fn expired(&self) -> bool {
+//         match self.expires_in {
+//             Some(expires_in) => {
+//                 let now = SystemTime::now()
+//                     .duration_since(UNIX_EPOCH)
+//                     .expect("Time went backwards")
+//                     .as_secs();
+//                 now > expires_in
+//             }
+//             None => true,
+//         }
+//     }
+
+//     fn retrieve_tokens(&self, code: &str) -> Result<Self, ureq::Error> {
+//         let response = ureq::post("https://oauth2.googleapis.com/token")
+//             .set("Content-Type", "application/x-www-form-urlencoded")
+//             .send_string(&format!(
+//             "client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri={}",
+//             &env::var("GOOGLE_OAUTH_CLIENT_ID").expect("This should never fail"),
+//             &env::var("GOOGLE_OAUTH_CLIENT_SECRET").expect("This should never fail"),
+//             code,
+//             &env::var("GOOGLE_OAUTH_REDIRECT_URI").expect("This should never fail")
+//         ))?;
+//         let new_credentials: Credentials = response.into_json()?;
+//         let refresh_token = match new_credentials.refresh_token {
+//             Some(refresh_token) => Some(refresh_token),
+//             None => self.refresh_token.clone(),
+//         };
+//         let expires_in = match new_credentials.expires_in {
+//             Some(expires_in) => {
+//                 let now = SystemTime::now()
+//                     .duration_since(UNIX_EPOCH)
+//                     .expect("Time went backwards")
+//                     .as_secs();
+//                 Some(now + expires_in)
+//             }
+//             None => None,
+//         };
+//         let credentials = Credentials {
+//             access_token: new_credentials.access_token,
+//             expires_in,
+//             id_token: new_credentials.id_token,
+//             refresh_token,
+//             scope: new_credentials.scope,
+//             token_type: new_credentials.token_type,
+//         };
+//         credentials.save()?;
+//         Ok(credentials)
+//     }
+
+//     fn refresh_access_token(&self) -> Result<Self, ureq::Error> {
+//         let refresh_token = self
+//             .refresh_token
+//             .clone()
+//             .expect("current_credentials should contain a refresh_token");
+//         let response = ureq::post("https://oauth2.googleapis.com/token")
+//             .set("Content-Type", "application/x-www-form-urlencoded")
+//             .send_string(&format!(
+//                 "client_id={}&client_secret={}&grant_type=refresh_token&refresh_token={}",
+//                 &env::var("GOOGLE_OAUTH_CLIENT_ID").expect("This should never fail"),
+//                 &env::var("GOOGLE_OAUTH_CLIENT_SECRET").expect("This should never fail"),
+//                 refresh_token
+//             ))?;
+//         let new_credentials: Credentials = response.into_json()?;
+//         let expires_in = match new_credentials.expires_in {
+//             Some(expires_in) => {
+//                 let now = SystemTime::now()
+//                     .duration_since(UNIX_EPOCH)
+//                     .expect("Time went backwards")
+//                     .as_secs();
+//                 Some(now + expires_in)
+//             }
+//             None => None,
+//         };
+//         let credentials = Credentials {
+//             access_token: new_credentials.access_token,
+//             expires_in,
+//             id_token: new_credentials.id_token,
+//             refresh_token: Some(refresh_token),
+//             scope: new_credentials.scope,
+//             token_type: new_credentials.token_type,
+//         };
+//         credentials.save()?;
+//         Ok(credentials)
+//     }
+
+//     pub fn revoke(&self) -> Result<(), ureq::Error> {
+//         let access_token = self
+//             .access_token
+//             .clone()
+//             .expect("current_credentials should contain an access_token");
+//         ureq::post("https://oauth2.googleapis.com/revoke")
+//             .set("Content-Type", "application/x-www-form-urlencoded")
+//             .send_string(&format!("token={}", access_token))?;
+//         remove_file("token.json")?;
+//         Ok(())
+//     }
+// }

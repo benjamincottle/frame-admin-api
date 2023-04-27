@@ -5,7 +5,7 @@ use uuid::Uuid;
 use crate::{
     google_oauth::{
         get_google_user, refresh_token, request_token, revoke_token, AuthGuard, OAuthResponse,
-        ValidUser,
+        JWTParser, ValidUser,
     },
     gphotos_api::{get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
@@ -260,6 +260,10 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
         return;
     }
     let token_response = token_response.expect("previously checked for error");
+    let parser = JWTParser::new(&app_data.env.google_oauth_client_id).unwrap();
+    let claims = parser
+        .parse::<TokenClaims>(&token_response.id_token.clone().unwrap())
+        .unwrap();
     let google_user = get_google_user(&token_response.access_token);
     if google_user.is_err() {
         let message = google_user.err().expect("google_user is err").to_string();
@@ -297,10 +301,9 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
         };
     } else {
         let datetime = Utc::now();
-        let id = Uuid::new_v4();
-        user_id = id.to_owned().to_string();
+        user_id = claims.sub;
         let user_data = User {
-            id: id.to_string(),
+            id: user_id.clone(),
             name: google_user.name,
             email,
             verified: google_user.verified_email,
@@ -384,9 +387,7 @@ fn handle_sync(
     let mut user_db = app_data.db.lock().unwrap();
     let user = user_db
         .iter_mut()
-        .find(|user| {
-            user.id == user_id
-        })
+        .find(|user| user.id == user_id)
         .expect("auth_guard is Ok");
     let mut credentials = user.credentials.clone();
 
@@ -732,7 +733,10 @@ fn handle_revoke(app_data: AppState, request: Request, auth_guard: AuthGuard<Val
             Response::from_data(rendered)
         }
         Err(e) => {
-            log::error!("[Error] (handle_revoke) error revoking access/refresh token, {}", e);
+            log::error!(
+                "[Error] (handle_revoke) error revoking access/refresh token, {}",
+                e
+            );
             serve_error(
                 request,
                 tiny_http::StatusCode(500),
