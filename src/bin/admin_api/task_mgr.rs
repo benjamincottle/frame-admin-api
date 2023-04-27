@@ -25,6 +25,11 @@ impl TASK_BOARD {
         self.lock().unwrap();
     }
 
+    pub fn get_board(&self) -> TaskBoard {
+        let task_board = self.lock().unwrap();
+        task_board.clone()
+    }
+
     pub fn add_task(&self, action: Action) -> TaskId {
         let mut task_board = self.lock().unwrap();
         task_board.next_task_id += 1;
@@ -39,23 +44,11 @@ impl TASK_BOARD {
         task_board.next_task_id
     }
 
-    pub fn get_board(&self) -> TaskBoard {
-        let task_board = self.lock().unwrap();
-        task_board.clone()
-    }
-
     pub fn set_board_data(&self, task_id: TaskId, status: Status) {
         let mut task_board = self.lock().unwrap();
         if let Some(task) = task_board.tasks.get_mut(&task_id) {
             task.status = status;
         } // TODO: or handle error?
-    }
-
-    pub fn get_task_ids(&self) -> Vec<TaskId> {
-        let task_board = self.lock().unwrap();
-        let mut task_ids: Vec<TaskId> = task_board.tasks.keys().cloned().collect();
-        task_ids.sort();
-        task_ids
     }
 
     pub fn reset(&self) {
