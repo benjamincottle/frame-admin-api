@@ -21,14 +21,14 @@ lazy_static! {
         let urls = {
             let mut urls = BTreeMap::new();
             urls.insert("index".to_string(), "/frame_admin".to_string());
-            urls.insert("login".to_string(), "/frame_admin/login".to_string());
-            urls.insert("logout".to_string(), "/frame_admin/logout".to_string());
+            urls.insert("login".to_string(), "/frame_admin/oauth/login".to_string());
+            urls.insert("logout".to_string(), "/frame_admin/oauth/logout".to_string());
             urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
             urls.insert(
                 "telemetry".to_string(),
                 "/frame_admin/telemetry".to_string(),
             );
-            urls.insert("revoke".to_string(), "/frame_admin/revoke".to_string());
+            urls.insert("revoke".to_string(), "/frame_admin/oauth/revoke".to_string());
             urls
         };
         tera.register_function("url_for", make_url_for(urls.clone()));

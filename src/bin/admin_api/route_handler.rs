@@ -53,12 +53,12 @@ pub fn route_request(app_data: AppState, request: Request) {
     let url = url.path().trim_end_matches("/");
     let mut router = Router::new();
     router.add("/frame_admin", "index".to_string());
-    router.add("/frame_admin/login", "login".to_string());
-    router.add("/frame_admin/logout", "logout".to_string());
+    router.add("/frame_admin/oauth/login", "oauth_login".to_string());
+    router.add("/frame_admin/oauth/logout", "oauth_logout".to_string());
+    router.add("/frame_admin/oauth/authorise", "oauth_authorise".to_string());
+    router.add("/frame_admin/oauth/google", "oauth_google".to_string());
+    router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
     router.add("/frame_admin/sync", "sync".to_string());
-    router.add("/frame_admin/authorise", "authorise".to_string());
-    router.add("/frame_admin/oauth2callback", "oauth2callback".to_string());
-    router.add("/frame_admin/revoke", "revoke".to_string());
     router.add("/frame_admin/telemetry", "telemetry".to_string());
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
     router.add("/frame_admin/tasks", "tasks".to_string());
@@ -76,24 +76,24 @@ pub fn route_request(app_data: AppState, request: Request) {
         "index" => {
             handle_index(request, auth_guard);
         }
-        "login" => {
-            if let Some(err) = handle_login(app_data, request).err() {
+        "oauth_login" => {
+            if let Some(err) = handle_oauth_login(app_data, request).err() {
                 log::error!("[Error] (route_request) login route failed: {}", err);
             };
         }
-        "logout" => {
-            handle_logout(request, auth_guard);
+        "oauth_logout" => {
+            handle_oauth_logout(request, auth_guard);
         }
         "sync" => {
             if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
                 log::error!("[Error] (route_request) sync route failed: {}", err);
             };
         }
-        "authorise" => {
-            handle_authorise(request);
+        "oauth_authorise" => {
+            handle_oauth_authorise(request);
         }
-        "oauth2callback" => {
-            handle_oauth2callback(app_data, request);
+        "oauth_google" => {
+            handle_oauth_google(app_data, request);
         }
         "telemetry" => {
             handle_telemetry(request, auth_guard);
@@ -106,8 +106,8 @@ pub fn route_request(app_data: AppState, request: Request) {
                 );
             };
         }
-        "revoke" => {
-            handle_revoke(app_data, request, auth_guard);
+        "oauth_revoke" => {
+            handle_oauth_revoke(app_data, request, auth_guard);
         }
         "tasks" => {
             handle_tasks(request, auth_guard);
@@ -123,7 +123,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     }
 }
 
-fn handle_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_oauth_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(e) = SESSION_MGR.get_session_id(&request).err() {
         log::info!("[Info] (handle_login) session error: {:?}", e);
         let next_uri = request
@@ -140,7 +140,7 @@ fn handle_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std:
             .add_header(Header::from_str("Location: authorise").expect("This should never fail"));
         response.add_header(
             Header::from_str(&format!(
-                "Set-Cookie: session={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
                 session_id,
                 app_data.env.jwt_max_age * 60
             ))
@@ -158,7 +158,7 @@ fn handle_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std:
     Ok(())
 }
 
-fn handle_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_oauth_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let mut response = Response::empty(tiny_http::StatusCode(302));
     match auth_guard {
         Ok(_) => {
@@ -171,7 +171,7 @@ fn handle_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
             );
             response.add_header(
                 Header::from_str(&format!(
-                    "Set-Cookie: session=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                    "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
                     Duration::seconds(-1)
                 ))
                 .expect("This should never fail"),
@@ -184,7 +184,7 @@ fn handle_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-fn handle_authorise(request: Request) {
+fn handle_oauth_authorise(request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
@@ -221,7 +221,7 @@ fn handle_authorise(request: Request) {
     dispatch_response(request, response);
 }
 
-fn handle_oauth2callback(app_data: AppState, request: Request) {
+fn handle_oauth_google(app_data: AppState, request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
@@ -347,6 +347,69 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
     response.add_header(
         tiny_http::Header::from_bytes(&b"Location"[..], &session_next_uri[..])
             .expect("This should never fail"),
+    );
+    dispatch_response(request, response);
+}
+
+fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+    match auth_guard {
+        Ok(_) => {}
+        Err(_) => {
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
+            return;
+        }
+    };
+    let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
+    let mut user_db = app_data.db.lock().unwrap();
+    let user = user_db
+        .iter_mut()
+        .find(|user| user.id == user_id)
+        .expect("auth_guard is Ok");
+    let credentials = user.credentials.clone();
+    let mut response = match revoke_token(credentials.access_token.as_str()) {
+        Ok(_) => {
+            user.credentials.expires_in = 0;
+            user.credentials.refresh_token = None;
+            user.credentials.id_token = None;
+            user.updatedAt = Utc::now();
+            drop(user_db);
+            log::info!("[Info] (handle_revoke) revoked access/refresh token");
+            let mut context = Context::new();
+            context.insert("message", "Credentials revoked");
+            let rendered = TEMPLATES.render("revoke.html.tera", &context);
+            Response::from_data(rendered)
+        }
+        Err(e) => {
+            log::error!(
+                "[Error] (handle_revoke) error revoking access/refresh token, {}",
+                e
+            );
+            serve_error(
+                request,
+                tiny_http::StatusCode(500),
+                "Internal server error: error revoking credentials",
+            );
+            return;
+        }
+    };
+    response.add_header(
+        Header::from_str(&format!(
+            "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+            Duration::seconds(-1)
+        ))
+        .expect("This should never fail"),
+    );
+    response.add_header(
+        Header::from_str(&format!(
+            "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
+            Duration::seconds(-1)
+        ))
+        .expect("This should never fail"),
     );
     dispatch_response(request, response);
 }
@@ -696,69 +759,6 @@ fn handle_image(
     );
     dispatch_response(request, response);
     Ok(())
-}
-
-fn handle_revoke(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
-    match auth_guard {
-        Ok(_) => {}
-        Err(_) => {
-            let mut response = Response::empty(tiny_http::StatusCode(302));
-            response.add_header(
-                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/login")
-                    .expect("This should never fail"),
-            );
-            dispatch_response(request, response);
-            return;
-        }
-    };
-    let email = auth_guard.expect("auth_guard is Ok").user_id.clone();
-    let mut user_db = app_data.db.lock().unwrap();
-    let user = user_db
-        .iter_mut()
-        .find(|user| user.email == email)
-        .expect("auth_guard is Ok");
-    let credentials = user.credentials.clone();
-    let mut response = match revoke_token(credentials.access_token.as_str()) {
-        Ok(_) => {
-            user.credentials.expires_in = 0;
-            user.credentials.refresh_token = None;
-            user.credentials.id_token = None;
-            user.updatedAt = Utc::now();
-            drop(user_db);
-            log::info!("[Info] (handle_revoke) revoked access/refresh token");
-            let mut context = Context::new();
-            context.insert("message", "Credentials revoked");
-            let rendered = TEMPLATES.render("revoke.html.tera", &context);
-            Response::from_data(rendered)
-        }
-        Err(e) => {
-            log::error!(
-                "[Error] (handle_revoke) error revoking access/refresh token, {}",
-                e
-            );
-            serve_error(
-                request,
-                tiny_http::StatusCode(500),
-                "Internal server error: error revoking credentials",
-            );
-            return;
-        }
-    };
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            Duration::seconds(-1)
-        ))
-        .expect("This should never fail"),
-    );
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: session=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            Duration::seconds(-1)
-        ))
-        .expect("This should never fail"),
-    );
-    dispatch_response(request, response);
 }
 
 fn extract_params(url: &str) -> HashMap<String, String> {
