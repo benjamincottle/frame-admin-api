@@ -1,11 +1,10 @@
 use chrono::{Duration, Utc};
 use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
-use uuid::Uuid;
 
 use crate::{
     google_oauth::{
-        get_google_user, refresh_token, request_token, revoke_token, AuthGuard, OAuthResponse,
-        JWTParser, ValidUser,
+        get_google_user, refresh_token, request_token, revoke_token, AuthGuard, JWTParser,
+        OAuthResponse, ValidUser,
     },
     gphotos_api::{get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
@@ -75,7 +74,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     let auth_guard: AuthGuard<ValidUser> = ValidUser::from_request(&app_data, &request);
     match matched.handler().as_str() {
         "index" => {
-            handle_index(app_data, request, auth_guard);
+            handle_index(request, auth_guard);
         }
         "login" => {
             if let Some(err) = handle_login(app_data, request).err() {
@@ -83,7 +82,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             };
         }
         "logout" => {
-            handle_logout(app_data, request, auth_guard);
+            handle_logout(request, auth_guard);
         }
         "sync" => {
             if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
@@ -159,10 +158,10 @@ fn handle_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std:
     Ok(())
 }
 
-fn handle_logout(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let mut response = Response::empty(tiny_http::StatusCode(302));
     match auth_guard {
-        Ok(user) => {
+        Ok(_) => {
             response.add_header(
                 Header::from_str(&format!(
                     "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
@@ -352,9 +351,9 @@ fn handle_oauth2callback(app_data: AppState, request: Request) {
     dispatch_response(request, response);
 }
 
-fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
-        Ok(user) => {
+        Ok(_) => {
             let mut context = Context::new();
             context.insert("user", &true);
             context

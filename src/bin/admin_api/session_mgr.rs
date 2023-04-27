@@ -74,11 +74,6 @@ impl SESSION_MGR {
         }
     }
 
-    pub fn remove_session(&self, session_id: &str) -> bool {
-        let mut session_mgr = self.lock().unwrap();
-        session_mgr.sessions.remove(session_id).is_some()
-    }
-
     fn clean_expired(&self) {
         let mut session_mgr = self.lock().unwrap();
         let now = SystemTime::now();
