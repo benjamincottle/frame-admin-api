@@ -387,10 +387,12 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             user.updatedAt = Utc::now();
             drop(user_db);
             log::info!("[Info] (handle_revoke) revoked access/refresh token");
-            let mut context = Context::new();
-            context.insert("message", "Credentials revoked");
-            let rendered = TEMPLATES.render("revoke.html.tera", &context);
-            Response::from_data(rendered)
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin")
+                    .expect("This should never fail"),
+            );
+            response
         }
         Err(e) => {
             log::error!(
