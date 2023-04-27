@@ -38,22 +38,3 @@ pub struct TokenClaims {
     pub iat: usize,
     pub exp: usize,
 }
-
-#[derive(Debug, Deserialize)]
-struct QueryCode {
-    code: String,
-    state: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct RegisterUserSchema {
-    name: String,
-    email: String,
-    password: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct LoginUserSchema {
-    email: String,
-    password: String,
-}

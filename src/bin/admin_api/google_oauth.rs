@@ -1,11 +1,14 @@
+use chrono::Duration;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     env,
     error::Error,
     fs::{remove_file, File},
     io::{BufReader, BufWriter},
-    time::{SystemTime, UNIX_EPOCH},
+    sync::{Arc, Mutex},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use tiny_http::Request;
 
@@ -207,9 +210,7 @@ pub fn refresh_token(
         .set("Content-Type", "application/x-www-form-urlencoded")
         .send_string(&format!(
             "client_id={}&client_secret={}&grant_type=refresh_token&refresh_token={}",
-            client_id,
-            client_secret,
-            refresh_token
+            client_id, client_secret, refresh_token
         ));
     if response.is_ok() {
         let oauth_response = response.unwrap().into_json::<OAuthResponse>()?;
@@ -312,4 +313,160 @@ impl ValidUser {
             }
         }
     }
+}
+
+#[derive(Deserialize, Clone)]
+pub struct GoogleKeys {
+    keys: Vec<GoogleKey>,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct GoogleKey {
+    kid: String,
+    n: String,
+    e: String,
+}
+
+#[derive(Debug)]
+pub enum GoogleKeyProviderError {
+    KeyNotFound(String),
+    FetchError(String),
+    ParseError(String),
+    CreateKeyError(String),
+}
+
+#[derive(Debug)]
+pub enum ParserError {
+    WrongHeader,
+    UnknownKid,
+    KeyProvider(GoogleKeyProviderError),
+    WrongToken(jsonwebtoken::errors::Error),
+}
+
+pub struct Parser {
+    client_id: String,
+    key_provider: Arc<Mutex<GooglePublicKeyProvider>>,
+}
+
+impl Parser {
+    pub fn new(client_id: &str) -> Result<Self, Box<dyn Error>> {
+        let oidc_config_url = "https://accounts.google.com/.well-known/openid-configuration";
+        let oidc_config_resp = ureq::get(oidc_config_url).call()?;
+        let oidc_config: ureq::serde_json::Value = oidc_config_resp.into_json()?;
+        let jwks_uri = oidc_config["jwks_uri"].as_str().unwrap();
+        Ok(Parser::new_with_custom_cert_url(client_id, jwks_uri))
+    }
+
+    pub fn new_with_custom_cert_url(client_id: &str, public_key_url: &str) -> Self {
+        Self {
+            client_id: client_id.to_owned(),
+            key_provider: Arc::new(Mutex::new(GooglePublicKeyProvider::new(public_key_url))),
+        }
+    }
+
+    pub fn parse<T: DeserializeOwned>(&self, token: &str) -> Result<T, ParserError> {
+        let mut provider = self.key_provider.lock().unwrap();
+        match jsonwebtoken::decode_header(token) {
+            Ok(header) => match header.kid {
+                None => Result::Err(ParserError::UnknownKid),
+                Some(kid) => match provider.get_key(kid.as_str()) {
+                    Ok(key) => {
+                        let aud = vec![self.client_id.to_owned()];
+                        let mut validation = Validation::new(Algorithm::RS256);
+                        validation.set_audience(&aud);
+                        validation.set_issuer(&[
+                            "https://accounts.google.com".to_string(),
+                            "accounts.google.com".to_string(),
+                        ]);
+                        validation.validate_exp = true;
+                        validation.validate_nbf = false;
+                        let result = jsonwebtoken::decode::<T>(token, &key, &validation);
+                        match result {
+                            Result::Ok(token_data) => Result::Ok(token_data.claims),
+                            Result::Err(error) => Result::Err(ParserError::WrongToken(error)),
+                        }
+                    }
+                    Err(e) => {
+                        let error = ParserError::KeyProvider(e);
+                        Result::Err(error)
+                    }
+                },
+            },
+            Err(_) => Result::Err(ParserError::WrongHeader),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct GooglePublicKeyProvider {
+    url: String,
+    keys: HashMap<String, GoogleKey>,
+    expiration_time: Option<Instant>,
+}
+
+impl GooglePublicKeyProvider {
+    pub fn new(public_key_url: &str) -> Self {
+        Self {
+            url: public_key_url.to_owned(),
+            keys: Default::default(),
+            expiration_time: None,
+        }
+    }
+
+    pub fn reload(&mut self) -> Result<(), GoogleKeyProviderError> {
+        match ureq::get(&self.url).call() {
+            Ok(r) => {
+                let expiration_time = r.header("cache-control").and_then(|v| {
+                    v.split(",")
+                        .find(|s| s.contains("max-age"))
+                        .and_then(|s| s.split("=").nth(1))
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .map(|s| Instant::now() + std::time::Duration::from_secs(s))
+                });
+                match r.into_json::<GoogleKeys>() {
+                    Ok(google_keys) => {
+                        self.keys.clear();
+                        for key in google_keys.keys.into_iter() {
+                            self.keys.insert(key.kid.clone(), key);
+                        }
+                        self.expiration_time = expiration_time;
+                        Result::Ok(())
+                    }
+                    Err(e) => Result::Err(GoogleKeyProviderError::ParseError(format!("{:?}", e))),
+                }
+            }
+            Err(e) => Result::Err(GoogleKeyProviderError::FetchError(format!("{:?}", e))),
+        }
+    }
+
+    pub fn is_expire(&self) -> bool {
+        if let Some(expire) = self.expiration_time {
+            Instant::now() > expire
+        } else {
+            false
+        }
+    }
+
+    pub fn get_key(&mut self, kid: &str) -> Result<DecodingKey, GoogleKeyProviderError> {
+        if self.expiration_time.is_none() || self.is_expire() {
+            self.reload()?
+        }
+        match self.keys.get(&kid.to_owned()) {
+            None => Result::Err(GoogleKeyProviderError::KeyNotFound(
+                "couldn't match kid".to_string(),
+            )),
+            Some(key) => DecodingKey::from_rsa_components(key.n.as_str(), key.e.as_str())
+                .map_err(|e| GoogleKeyProviderError::CreateKeyError(e.to_string())),
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IdentityTokenClaims {
+    pub email: String,
+    pub aud: String,
+    pub iss: String,
+    pub exp: u64,
+    pub iat: u64,
+    pub sub: String,
 }
