@@ -1,6 +1,5 @@
 use chrono::{Duration, Utc};
 use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
-use lazy_static::__Deref;
 
 use crate::{
     google_oauth::{
@@ -24,7 +23,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     fs::File,
-    io::{BufWriter, Read, Write},
+    io::Read,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
     sync::Arc,
