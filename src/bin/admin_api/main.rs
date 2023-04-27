@@ -40,14 +40,12 @@ fn main() {
     }
     dotenv::from_path("secrets/.env").ok();
     env_logger::init();
- 
-    let app_data = AppState::init();
-
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     println!(
         "🚀 Server started successfully, listening on {}",
         server.server_addr()
     );
+    let app_data = AppState::init("secrets/user_db.json");
     let database_url = &env::var("POSTGRES_CONNECTION_STRING").expect("previously validated");
     let pool_size = 4;
     match CONNECTION_POOL.initialise(database_url, pool_size) {
@@ -95,7 +93,6 @@ fn main() {
             for user in user_db.iter() {
                 println!("[Debug]      {:?}", user);
             }
-
         }
         // thread::park();
     }

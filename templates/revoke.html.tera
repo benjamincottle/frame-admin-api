@@ -1,5 +1,6 @@
 {% extends 'base.html.tera' %}
 
 {% block content %}
+    <br>
     {{ message }}
 {% endblock %}

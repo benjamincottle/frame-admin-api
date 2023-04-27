@@ -1,5 +1,6 @@
 use chrono::{Duration, Utc};
 use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
+use lazy_static::__Deref;
 
 use crate::{
     google_oauth::{
@@ -23,7 +24,7 @@ use std::{
     collections::{HashMap, HashSet},
     env,
     fs::File,
-    io::Read,
+    io::{BufWriter, Read, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
     str::FromStr,
     sync::Arc,
@@ -55,7 +56,10 @@ pub fn route_request(app_data: AppState, request: Request) {
     router.add("/frame_admin", "index".to_string());
     router.add("/frame_admin/oauth/login", "oauth_login".to_string());
     router.add("/frame_admin/oauth/logout", "oauth_logout".to_string());
-    router.add("/frame_admin/oauth/authorise", "oauth_authorise".to_string());
+    router.add(
+        "/frame_admin/oauth/authorise",
+        "oauth_authorise".to_string(),
+    );
     router.add("/frame_admin/oauth/google", "oauth_google".to_string());
     router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
     router.add("/frame_admin/sync", "sync".to_string());
@@ -123,7 +127,10 @@ pub fn route_request(app_data: AppState, request: Request) {
     }
 }
 
-fn handle_oauth_login(app_data: AppState, request: Request) -> Result<(), Box<dyn std::error::Error>> {
+fn handle_oauth_login(
+    app_data: AppState,
+    request: Request,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(e) = SESSION_MGR.get_session_id(&request).err() {
         log::info!("[Info] (handle_login) session error: {:?}", e);
         let next_uri = request
@@ -320,6 +327,8 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         };
         user_db.push(user_data.to_owned());
     }
+    drop(user_db);
+    app_data.save("secrets/user_db.json");
     let jwt_secret = app_data.env.jwt_secret.to_owned();
     let now = Utc::now();
     let iat = now.timestamp() as usize;
