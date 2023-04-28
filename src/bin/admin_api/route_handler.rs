@@ -61,6 +61,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     );
     router.add("/frame_admin/oauth/google", "oauth_google".to_string());
     router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
+    router.add("/frame_admin/config", "config".to_string());
     router.add("/frame_admin/sync", "sync".to_string());
     router.add("/frame_admin/telemetry", "telemetry".to_string());
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
@@ -76,9 +77,6 @@ pub fn route_request(app_data: AppState, request: Request) {
     };
     let auth_guard: AuthGuard<ValidUser> = ValidUser::from_request(&app_data, &request);
     match matched.handler().as_str() {
-        "index" => {
-            handle_index(request, auth_guard);
-        }
         "oauth_login" => {
             if let Some(err) = handle_oauth_login(app_data, request).err() {
                 log::error!("[Error] (route_request) login route failed: {}", err);
@@ -87,19 +85,31 @@ pub fn route_request(app_data: AppState, request: Request) {
         "oauth_logout" => {
             handle_oauth_logout(request, auth_guard);
         }
-        "sync" => {
-            if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
-                log::error!("[Error] (route_request) sync route failed: {}", err);
-            };
-        }
         "oauth_authorise" => {
             handle_oauth_authorise(request);
         }
         "oauth_google" => {
             handle_oauth_google(app_data, request);
         }
+        "oauth_revoke" => {
+            handle_oauth_revoke(app_data, request, auth_guard);
+        }
+        "index" => {
+            handle_index(app_data, request, auth_guard);
+        }
+        "config" => {
+            handle_config(app_data, request, auth_guard);
+        }
+        "sync" => {
+            if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
+                log::error!("[Error] (route_request) sync route failed: {}", err);
+            };
+        }
+        "tasks" => {
+            handle_tasks(request, auth_guard);
+        }
         "telemetry" => {
-            handle_telemetry(request, auth_guard);
+            handle_telemetry(app_data, request, auth_guard);
         }
         "telemetry_data" => {
             if let Some(err) = handle_telemetry_data(request, auth_guard).err() {
@@ -108,12 +118,6 @@ pub fn route_request(app_data: AppState, request: Request) {
                     err
                 );
             };
-        }
-        "oauth_revoke" => {
-            handle_oauth_revoke(app_data, request, auth_guard);
-        }
-        "tasks" => {
-            handle_tasks(request, auth_guard);
         }
         "image" => {
             if let Some(err) = handle_image(request, auth_guard, matched.params()).err() {
@@ -137,7 +141,7 @@ fn handle_oauth_login(
             .iter()
             .find(|header| header.field.equiv("Referer"))
             .and_then(|h| Some(h.value.as_str()))
-            .or_else(|| Some("/frame_admin/telemetry"))
+            .or_else(|| Some("/frame_admin"))     // TODO: this should be the default route
             .expect("next_uri is now some");
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
@@ -365,7 +369,7 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
-                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/login")
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);
@@ -424,16 +428,55 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
     dispatch_response(request, response);
 }
 
-fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
         Ok(_) => {
-            let mut context = Context::new();
+            let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
+            let mut user_db = app_data.db.lock().unwrap();
+            let user = user_db
+            .iter_mut()
+            .find(|user| user.id == user_id)
+            .expect("auth_guard is Ok");
+        let profile_image = user.photo.clone();
+        drop(user_db);
+        let mut context = Context::new();
+            context.insert("profile_image", &profile_image);
             context.insert("user", &true);
             context
         }
         Err(_) => Context::new(),
     };
     let rendered = TEMPLATES.render("index.html.tera", &context);
+    let response = Response::from_data(rendered);
+    dispatch_response(request, response);
+}
+
+fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+    let mut context = match auth_guard {
+        Ok(_) => {
+            let mut context = Context::new();
+            context.insert("user", &true);
+            context
+        }
+        Err(_) => {
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
+            return;
+        }
+    };
+    let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
+    let mut user_db = app_data.db.lock().unwrap();
+    let user = user_db
+        .iter_mut()
+        .find(|user| user.id == user_id)
+        .expect("auth_guard is Ok");
+    let profile_image = user.photo.clone();
+    context.insert("profile_image", &profile_image);
+    let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
 }
@@ -448,7 +491,7 @@ fn handle_sync(
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
-                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/login")
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);
@@ -633,10 +676,19 @@ fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-fn handle_telemetry(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_telemetry(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     match auth_guard {
         Ok(_) => {
-            let mut context = Context::new();
+            let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
+            let mut user_db = app_data.db.lock().unwrap();
+            let user = user_db
+            .iter_mut()
+            .find(|user| user.id == user_id)
+            .expect("auth_guard is Ok");
+        let profile_image = user.photo.clone();
+        drop(user_db);
+        let mut context = Context::new();
+            context.insert("profile_image", &profile_image);
             context.insert("user", &true);
             let rendered = TEMPLATES.render("telemetry.html.tera", &context);
             let response = Response::from_data(rendered);
@@ -645,7 +697,7 @@ fn handle_telemetry(request: Request, auth_guard: AuthGuard<ValidUser>) {
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
-                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/login")
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);

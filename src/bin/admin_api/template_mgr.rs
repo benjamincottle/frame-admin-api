@@ -23,6 +23,7 @@ lazy_static! {
             urls.insert("index".to_string(), "/frame_admin".to_string());
             urls.insert("login".to_string(), "/frame_admin/oauth/login".to_string());
             urls.insert("logout".to_string(), "/frame_admin/oauth/logout".to_string());
+            urls.insert("config".to_string(), "/frame_admin/config".to_string());
             urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
             urls.insert(
                 "telemetry".to_string(),

@@ -15,39 +15,144 @@
           font-family: monospace;
       }
       body {
+        margin: 0px;
         background-color: var(--background-color);
         color: var(--text-color);
       }    
-    
-      .layout {
-        padding-top: 10px;
-        padding-left: 10px;
-        padding-bottom: 20px;
+      .layout_column {
+        padding: 10px;
         display: flex;
         flex-direction: column;
+      }
+      .layout_row {
+        width: 100%;
+        padding: 15px;
+        margin: 0px;
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-start;
+        align-items: center;
+        background: linear-gradient(to bottom, #1d2a39, #1F2227);
+      }
+      .layout_row_inner {
+        width: 100%;
+        padding: 10px;
+        padding-left: 15px;
+        margin: 0px;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+      }
+      .profile_image {
+        background-size: 32px 32px;
+        display: block;
+        border: 0px;
+        margin: 0px;
+        position: relative;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        left: -15px;
+      }
+      .profile_ring {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        left: -19px;
+        top: -4px;
+      }
+      .dog {
+        fill-opacity: 0.5;
+        transition: fill-opacity 0.3s ease-in-out;
+      }
+      .dog:hover {
+        fill-opacity: 0.76;
       }
       a,
       h1 {
         color: #777777;
       }
       button {
+        height: 26px;
         background-color: #909090;
         color: #121212;
       }
     </style>
   </head>
   <body>
-    <section class="layout">
-      <div>
+    <section class="layout_row">
 {% if user %}
-        <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
-        <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
-        <a href="{{ url_for(name='logout') }}"><button type="button">Logout</button></a>
-        <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
-{% else %}
-        <a href="{{ url_for(name='login') }}"><button type="button">Login</button></a>
-{% endif %}
+      <div>
+        <a href="{{ url_for(name='index') }}" style="opac">
+          <svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="44px" height="38px" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
+            <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none">
+              <path class="dog" d="M1540 5170 c-73 -20 -144 -81 -232 -201 -81 -110 -227 -359 -211
+              -359 4 0 2 -4 -4 -8 -29 -18 -188 -395 -230 -542 -29 -106 -24 -385 10 -556
+              32 -155 63 -250 112 -342 19 -36 35 -73 35 -82 0 -21 -102 -229 -183 -373 -37
+              -64 -74 -139 -83 -165 -25 -69 -22 -258 6 -462 28 -201 30 -402 7 -507 -26
+              -119 -67 -193 -148 -265 -91 -82 -121 -137 -127 -240 -4 -76 -4 -78 26 -106
+              27 -26 32 -39 43 -118 8 -62 9 -130 3 -224 -12 -183 -10 -280 5 -308 15 -28
+              82 -60 143 -68 66 -9 317 24 348 45 51 37 39 82 -42 160 -50 49 -69 61 -105
+              67 -24 3 -46 11 -49 16 -14 22 -22 158 -14 234 11 110 28 161 65 198 29 29
+              360 319 434 380 l35 28 19 -49 c10 -26 39 -136 63 -243 48 -214 80 -293 140
+              -350 20 -19 34 -28 30 -20 -6 12 -5 12 6 -1 27 -33 64 -42 183 -47 144 -5 218
+              8 257 45 35 33 36 67 3 115 -26 38 -60 53 -165 73 -48 10 -62 25 -100 106 -35
+              76 -49 159 -49 279 0 101 14 138 66 172 101 68 193 187 235 302 13 35 49 96
+              86 144 34 45 70 98 79 117 21 44 68 50 156 19 23 -8 132 -26 242 -40 235 -29
+              296 -44 388 -90 37 -19 74 -34 82 -34 8 0 15 -4 15 -9 0 -5 44 -32 98 -59 191
+              -98 361 -153 515 -169 l78 -8 3 -70 c2 -59 9 -86 48 -170 94 -207 154 -416
+              168 -585 9 -110 11 -119 59 -215 28 -55 52 -116 55 -135 6 -52 32 -138 50
+              -164 24 -38 98 -68 174 -72 55 -2 210 14 309 32 52 10 68 64 34 119 -35 57
+              -68 85 -101 85 -39 0 -102 57 -164 148 -77 113 -81 198 -19 487 l28 129 7 -99
+              c8 -120 32 -191 87 -258 24 -28 43 -64 47 -85 19 -117 45 -157 128 -199 41
+              -22 69 -27 145 -31 105 -5 240 10 327 38 59 18 59 18 58 57 0 21 -9 51 -19 66
+              -30 46 -70 60 -186 66 -117 7 -129 12 -160 72 -40 80 -47 229 -17 409 6 38 10
+              193 9 370 l-1 305 35 55 c52 79 104 184 173 350 84 204 85 209 79 319 -4 77
+              -11 112 -37 178 l-33 83 36 79 c42 92 112 293 152 436 16 55 29 102 31 103 1
+              2 27 -1 58 -8 49 -10 59 -9 93 9 44 23 75 51 126 113 26 31 50 49 79 57 59 18
+              109 45 135 73 33 36 122 265 129 335 14 129 -43 230 -172 305 -89 51 -207 154
+              -281 243 -87 104 -121 123 -185 100 -33 -11 -39 -10 -56 8 -11 11 -40 24 -64
+              28 -24 4 -75 19 -115 33 -195 70 -449 52 -639 -45 -70 -36 -83 -39 -129 -34
+              -65 9 -80 -3 -189 -148 -101 -135 -115 -149 -193 -186 -145 -71 -210 -183
+              -177 -308 8 -30 14 -69 14 -87 0 -51 43 -123 145 -241 52 -60 95 -113 95 -117
+              0 -16 -80 -47 -215 -83 -163 -44 -250 -75 -303 -109 -71 -45 -178 -94 -251
+              -117 -83 -25 -131 -24 -536 6 -293 22 -685 31 -980 23 -137 -4 -276 -5 -307
+              -2 l-58 6 -25 81 c-73 235 -97 488 -61 642 47 198 270 673 381 810 65 81 99
+              185 60 185 -8 0 -15 6 -15 13 -1 20 -111 65 -140 57z"/>
+            </g>
+          </svg>
+        </a>
       </div>
+      <div class="layout_row_inner">
+        <div>
+          <a href="{{ url_for(name='config') }}"><button type="button">Config</button></a>
+          <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
+          <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
+          <a href="{{ url_for(name='logout') }}"><button type="button">Logout</button></a>
+          <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
+        </div>
+        <div>
+          <a class="profile_image" href="https://accounts.google.com/SignOutOptions?continue=http://localhost:5000/frame_admin">
+            <div class="profile_ring">
+              <svg focusable="false" height="40px" version="1.1" viewBox="0 0 40 40" width="40px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="opacity:1.0">
+                <path d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" fill="#F6AD01"></path>
+                <path d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z" fill="#249A41"></path>
+                <path d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z" fill="#3174F1"></path>
+                <path d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2" fill="#E92D18"></path>
+              </svg>
+            </div>
+            <img class="profile_image" src="{{ profile_image }}" alt="">
+          </a>
+        </div>
+      </div>
+{% else %}
+      <div>
+        <a href="{{ url_for(name='login') }}"><button type="button">Login</button></a>
+      </div>
+{% endif %}
+    </section>
+
+    <section class="layout_column">
       <div>
         {% block content %} {% endblock %}
       </div>
