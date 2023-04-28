@@ -26,7 +26,9 @@
       }
       .layout_row {
         width: 100%;
-        padding: 15px;
+        padding-top: 15px;
+        padding-left: 15px;
+        padding-right: 15px;
         margin: 0px;
         display: flex;
         flex-direction: row;
@@ -34,6 +36,14 @@
         align-items: center;
         background: linear-gradient(to bottom, #1d2a39, #1F2227);
       }
+      .fp_layout {
+        width: 100%;
+        padding-top: 64px;
+        margin: 0px;
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+      }      
       .layout_row_inner {
         width: 100%;
         padding: 10px;
@@ -53,6 +63,11 @@
         height: 32px;
         border-radius: 50%;
         left: -15px;
+        opacity: 0.8;
+        transition: opacity 0.3s ease-in-out;
+      }
+      .profile_image:hover {
+        opacity: 1;
       }
       .profile_ring {
         position: absolute;
@@ -77,6 +92,14 @@
         background-color: #909090;
         color: #121212;
       }
+      #l_dog {
+        width: 44px;
+        height: 38px;
+      }
+      #fp_dog {
+        width: 440px;
+        height: 380px;
+      }      
     </style>
   </head>
   <body>
@@ -84,7 +107,7 @@
 {% if user %}
       <div>
         <a href="{{ url_for(name='index') }}" style="opac">
-          <svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="44px" height="38px" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
+          <svg id="l_dog" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
             <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none">
               <path class="dog" d="M1540 5170 c-73 -20 -144 -81 -232 -201 -81 -110 -227 -359 -211
               -359 4 0 2 -4 -4 -8 -29 -18 -188 -395 -230 -542 -29 -106 -24 -385 10 -556
@@ -132,7 +155,7 @@
           <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
         </div>
         <div>
-          <a class="profile_image" href="https://accounts.google.com/SignOutOptions?continue=http://localhost:5000/frame_admin">
+          <a class="profile_image" href="https://accounts.google.com/SignOutOptions">
             <div class="profile_ring">
               <svg focusable="false" height="40px" version="1.1" viewBox="0 0 40 40" width="40px" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" style="opacity:1.0">
                 <path d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" fill="#F6AD01"></path>

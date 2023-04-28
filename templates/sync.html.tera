@@ -1,5 +1,5 @@
 {% extends 'base.html.tera' %}
-
+{% block title %}Sync Database{% endblock %}
 {% block content %}
 <script>
   function updateTasks() {

@@ -1,4 +1,5 @@
 {% extends 'base.html.tera' %}
+{% block title %}System Telemetry{% endblock %}
 {% block tel_css %}
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
     <style>
@@ -33,6 +34,18 @@
       .highcharts-column-series rect.highcharts-point {
         stroke: var(--background-color);
       }
+      table.dataTable tbody tr:nth-child(odd),
+      table.dataTable.display tbody tr:nth-child(odd) {
+        background-color: var(--background-color);
+      }
+      table.dataTable tbody tr:nth-child(even),
+      table.dataTable.display tbody tr:nth-child(even) {
+        background-color: #25282D;
+      }
+      table.dataTable tbody tr:hover,
+      table.dataTable.display tbody tr:hover {
+        background-color: #2B2E33;
+      }
       input,
         select {
         color: #777777;
@@ -41,6 +54,8 @@
         padding-left: 75px;
         padding-right: 75px;
         display: flex;
+        flex-direction: row;
+        justify-content: space-around;
         align-items: center;
       }
       .dtable {
@@ -48,24 +63,34 @@
         padding-left: 50px;
         padding-right: 50px;
       }
-      .grow { flex-grow: 1; }
-        .img-fluid {
+      .grow { 
+        flex-grow: 1;
+        max-width: 800px;
+       }
+      .img-fluid {
         max-width: 100%;
         height: auto;
       }
-span[title] {
-    position: relative;
-    z-index: 9999;
-    cursor: text;
-}
-span[title]:hover:before {
-    content: attr(ctitle);
-    background-color: var(--background-color);
-    color: var(--text-color);
-    position: absolute;
-    transform: translateY(-1px);
-    white-space: pre;
-}      
+      span[title] {
+          position: relative;
+          z-index: 9999;
+          cursor: text;
+      }
+      span[title]:hover:before {
+          content: attr(ctitle);
+          background-color: var(--background-color);
+          color: var(--text-color);
+          position: absolute;
+          transform: translateY(-1px);
+          white-space: pre;
+      }
+      canvas {
+        transition: opacity 0.3s ease-in-out;
+        opacity: 0.6;
+      }
+      canvas:hover {
+        opacity: 0.76;
+      }      
     </style>    
 {% endblock %}
 {% block tel_js %}
