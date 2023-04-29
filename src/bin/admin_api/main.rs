@@ -40,11 +40,6 @@ fn main() {
     env_logger::init();
     let app_data = AppState::init("secrets/");
     Config::save(&app_data.env, "secrets/");
-    let server = Server::http("0.0.0.0:5000").expect("This should not fail");
-    log::info!(
-        "🚀 server started successfully, listening on {}",
-        server.server_addr()
-    );
     let pool_size = 4;
     match CONNECTION_POOL.initialise(&app_data.env.postgres_connection_string, pool_size) {
         Err(e) => {
@@ -56,6 +51,11 @@ fn main() {
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
+    let server = Server::http("0.0.0.0:5000").expect("This should not fail");
+    log::info!(
+        "🚀 server started successfully, listening on {}",
+        server.server_addr()
+    );
     let server = Arc::new(server);
     for _ in 0..4 {
         let server = server.clone();
