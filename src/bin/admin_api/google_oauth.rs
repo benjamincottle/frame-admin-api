@@ -1,4 +1,4 @@
-use crate::model::{AppState, TokenClaims};
+use crate::model::{AppState, TokenClaims, User};
 
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
@@ -107,7 +107,7 @@ pub type AuthGuard<T> = Result<T, AuthError>;
 
 #[derive(Serialize)]
 pub struct ValidUser {
-    pub user_id: String,
+    pub user: User,
 }
 
 impl ValidUser {
@@ -158,7 +158,7 @@ impl ValidUser {
                 }
 
                 Ok(ValidUser {
-                    user_id: token.claims.sub,
+                    user: user.expect("user is some").clone(),
                 })
             }
             Err(_) => {

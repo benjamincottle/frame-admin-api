@@ -141,7 +141,7 @@ fn handle_oauth_login(
             .iter()
             .find(|header| header.field.equiv("Referer"))
             .and_then(|h| Some(h.value.as_str()))
-            .or_else(|| Some("/frame_admin"))     // TODO: this should be the default route
+            .or_else(|| Some("/frame_admin")) // TODO: this should be the default route
             .expect("next_uri is now some");
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
@@ -364,8 +364,8 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
 }
 
 fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
-    match auth_guard {
-        Ok(_) => {}
+    let auth_guard = match auth_guard {
+        Ok(auth_guard) => auth_guard,
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
@@ -376,11 +376,10 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             return;
         }
     };
-    let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
     let mut user_db = app_data.db.lock().unwrap();
     let user = user_db
         .iter_mut()
-        .find(|user| user.id == user_id)
+        .find(|user| user.id == auth_guard.user.id)
         .expect("auth_guard is Ok");
     let credentials = user.credentials.clone();
     let mut response = match revoke_token(credentials.access_token.as_str()) {
@@ -430,17 +429,9 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
 
 fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
-        Ok(_) => {
-            let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
-            let mut user_db = app_data.db.lock().unwrap();
-            let user = user_db
-            .iter_mut()
-            .find(|user| user.id == user_id)
-            .expect("auth_guard is Ok");
-        let profile_image = user.photo.clone();
-        drop(user_db);
-        let mut context = Context::new();
-            context.insert("profile_image", &profile_image);
+        Ok(auth_guard) => {
+            let mut context = Context::new();
+            context.insert("profile_image", &auth_guard.user.photo);
             context.insert("user", &true);
             context
         }
@@ -452,12 +443,8 @@ fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<Vali
 }
 
 fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
-    let mut context = match auth_guard {
-        Ok(_) => {
-            let mut context = Context::new();
-            context.insert("user", &true);
-            context
-        }
+    let auth_guard = match auth_guard {
+        Ok(auth_guard) => auth_guard,
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
@@ -468,14 +455,9 @@ fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<Val
             return;
         }
     };
-    let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
-    let mut user_db = app_data.db.lock().unwrap();
-    let user = user_db
-        .iter_mut()
-        .find(|user| user.id == user_id)
-        .expect("auth_guard is Ok");
-    let profile_image = user.photo.clone();
-    context.insert("profile_image", &profile_image);
+    let mut context = Context::new();
+    context.insert("user", &true);
+    context.insert("profile_image", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -486,8 +468,8 @@ fn handle_sync(
     request: Request,
     auth_guard: AuthGuard<ValidUser>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    match auth_guard {
-        Ok(_) => {}
+    let auth_guard = match auth_guard {
+        Ok(auth_guard) => auth_guard,
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
@@ -498,7 +480,7 @@ fn handle_sync(
             return Ok(());
         }
     };
-    let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
+    let user_id = auth_guard.user.id;
     let mut user_db = app_data.db.lock().unwrap();
     let user = user_db
         .iter_mut()
@@ -555,6 +537,7 @@ fn handle_sync(
     let mut context = Context::new();
     if new_set.len() == 0 && deleted_set.len() == 0 {
         context.insert("user", &true);
+        context.insert("profile_image", &auth_guard.user.photo);
         let rendered = TEMPLATES.render("sync.html.tera", &context);
         let response = Response::from_data(rendered);
         dispatch_response(request, response);
@@ -650,6 +633,7 @@ fn handle_sync(
     }
     log::info!("[Info] (handle_sync) {} sync thread(s) dispatched", threads);
     context.insert("user", &true);
+    context.insert("profile_image", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("sync.html.tera", &Context::new());
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -677,23 +661,8 @@ fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
 }
 
 fn handle_telemetry(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
-    match auth_guard {
-        Ok(_) => {
-            let user_id = auth_guard.expect("auth_guard is Ok").user_id.clone();
-            let mut user_db = app_data.db.lock().unwrap();
-            let user = user_db
-            .iter_mut()
-            .find(|user| user.id == user_id)
-            .expect("auth_guard is Ok");
-        let profile_image = user.photo.clone();
-        drop(user_db);
-        let mut context = Context::new();
-            context.insert("profile_image", &profile_image);
-            context.insert("user", &true);
-            let rendered = TEMPLATES.render("telemetry.html.tera", &context);
-            let response = Response::from_data(rendered);
-            dispatch_response(request, response);
-        }
+    let auth_guard = match auth_guard {
+        Ok(auth_guard) => auth_guard,
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
@@ -701,8 +670,15 @@ fn handle_telemetry(app_data: AppState, request: Request, auth_guard: AuthGuard<
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);
+            return;
         }
     };
+    let mut context = Context::new();
+    context.insert("profile_image", &auth_guard.user.photo);
+    context.insert("user", &true);
+    let rendered = TEMPLATES.render("telemetry.html.tera", &context);
+    let response = Response::from_data(rendered);
+    dispatch_response(request, response);
 }
 
 fn handle_telemetry_data(
