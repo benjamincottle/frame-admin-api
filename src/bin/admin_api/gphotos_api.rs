@@ -17,12 +17,15 @@ pub struct SearchResult {
     nextPageToken: Option<String>,
 }
 
-pub fn get_mediaitems(access_token: &str) -> Result<HashSet<MediaItem>, ureq::Error> {
+pub fn get_mediaitems(
+    access_token: &str,
+    album_id: &str,
+) -> Result<HashSet<MediaItem>, ureq::Error> {
     let mut media_item_list: HashSet<MediaItem> = HashSet::new();
     let mut page_token = "".to_string();
     loop {
         let body = ureq::json!({
-            "albumId": &env::var("GOOGLE_PHOTOS_ALBUM_ID").expect("This should never fail"),
+            "albumId": album_id,
             "pageToken": page_token,
             "pageSize": 100,
         });

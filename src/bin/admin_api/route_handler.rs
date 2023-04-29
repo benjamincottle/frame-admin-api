@@ -86,7 +86,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             handle_oauth_logout(request, auth_guard);
         }
         "oauth_authorise" => {
-            handle_oauth_authorise(request);
+            handle_oauth_authorise(app_data, request);
         }
         "oauth_google" => {
             handle_oauth_google(app_data, request);
@@ -149,7 +149,7 @@ fn handle_oauth_login(
             Header::from_str(&format!(
                 "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
                 session_id,
-                app_data.env.jwt_max_age * 60
+                app_data.env.jwt_max_age
             ))
             .expect("This should never fail"),
         );
@@ -191,7 +191,7 @@ fn handle_oauth_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-fn handle_oauth_authorise(request: Request) {
+fn handle_oauth_authorise(app_data: AppState, request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
@@ -205,14 +205,8 @@ fn handle_oauth_authorise(request: Request) {
     let mut url =
         Url::parse("https://accounts.google.com/o/oauth2/v2/auth").expect("This should never fail");
     url.query_pairs_mut()
-        .append_pair(
-            "client_id",
-            &env::var("GOOGLE_OAUTH_CLIENT_ID").expect("This should never fail"),
-        )
-        .append_pair(
-            "redirect_uri",
-            &env::var("GOOGLE_OAUTH_REDIRECT_URI").expect("This should never fail"),
-        )
+        .append_pair("client_id", &app_data.env.google_oauth_client_id)
+        .append_pair("redirect_uri", &app_data.env.google_oauth_redirect_url)
         .append_pair("response_type", "code")
         .append_pair(
             "scope",
@@ -332,7 +326,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let jwt_secret = app_data.env.jwt_secret.to_owned();
     let now = Utc::now();
     let iat = now.timestamp() as usize;
-    let exp = (now + Duration::minutes(app_data.env.jwt_max_age)).timestamp() as usize;
+    let exp = (now + Duration::seconds(app_data.env.jwt_max_age)).timestamp() as usize;
     let claims: TokenClaims = TokenClaims {
         sub: user_id,
         exp,
@@ -348,8 +342,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     response.add_header(
         Header::from_str(&format!(
             "Set-Cookie: token={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            token,
-            app_data.env.jwt_max_age * 60
+            token, app_data.env.jwt_max_age
         ))
         .expect("This should never fail"),
     );
@@ -511,7 +504,7 @@ fn handle_sync(
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let db_set = dbclient.get_mediaitems_set()?;
     CONNECTION_POOL.release_client(dbclient);
-    let gg_mediaitems = get_mediaitems(&access_token)?;
+    let gg_mediaitems = get_mediaitems(&access_token, &app_data.env.google_photos_album_id)?;
     let gg_set: HashSet<_> = gg_mediaitems
         .iter()
         .map(|media_item| media_item.id.clone())
