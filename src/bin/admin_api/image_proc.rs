@@ -122,7 +122,7 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
         None => {
             return Err(Box::new(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "[Error] (decode_image) Invalid image data image_buf is None",
+                "(decode_image) Invalid image data image_buf is None",
             )));
         }
     };

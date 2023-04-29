@@ -41,8 +41,8 @@ fn main() {
     dotenv::from_path("secrets/.env").ok();
     env_logger::init();
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
-    println!(
-        "🚀 Server started successfully, listening on {}",
+    log::info!(
+        "🚀 server started successfully, listening on {}",
         server.server_addr()
     );
     let app_data = AppState::init("secrets/user_db.json");
@@ -66,7 +66,7 @@ fn main() {
             let request = match server.recv() {
                 Ok(r) => r,
                 Err(e) => {
-                    log::error!("[Error] (main) could not receive request: {}", e);
+                    log::error!("could not receive request: {}", e);
                     continue;
                 }
             };
@@ -108,7 +108,7 @@ fn main() {
 //     env_logger::init();
 //     if env::var("POSTGRES_CONNECTION_STRING").is_err()
 //     {
-//         log::error!("[Error] (main) environment not configured");
+//         log::error!("environment not configured");
 //         return;
 //     }
 //     let database_url = &env::var("POSTGRES_CONNECTION_STRING").expect("previously validated");

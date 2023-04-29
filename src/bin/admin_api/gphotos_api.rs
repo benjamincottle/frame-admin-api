@@ -64,7 +64,7 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
         None => {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                "[Error] (get_photo) Failed to dowload image",
+                "(get_photo) Failed to dowload image",
             )
             .into())
         }

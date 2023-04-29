@@ -146,7 +146,7 @@
         </a>
       </div>
       <div class="header_nav">
-{% if not user %}
+{% if not profile %}
         <div>
           <a href="{{ url_for(name='login') }}"><button type="button">Login</button></a>
         </div>

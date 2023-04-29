@@ -41,7 +41,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     {
         Ok(url) => url,
         Err(e) => {
-            log::error!("[Error] (route_request) could not parse url: {}", e);
+            log::error!("(route_request) could not parse url: {}", e);
             serve_error(
                 request,
                 tiny_http::StatusCode(500),
@@ -79,7 +79,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     match matched.handler().as_str() {
         "oauth_login" => {
             if let Some(err) = handle_oauth_login(app_data, request).err() {
-                log::error!("[Error] (route_request) login route failed: {}", err);
+                log::error!("(route_request) login route failed: {}", err);
             };
         }
         "oauth_logout" => {
@@ -95,33 +95,30 @@ pub fn route_request(app_data: AppState, request: Request) {
             handle_oauth_revoke(app_data, request, auth_guard);
         }
         "index" => {
-            handle_index(app_data, request, auth_guard);
+            handle_index(request, auth_guard);
         }
         "config" => {
             handle_config(app_data, request, auth_guard);
         }
         "sync" => {
             if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
-                log::error!("[Error] (route_request) sync route failed: {}", err);
+                log::error!("(route_request) sync route failed: {}", err);
             };
         }
         "tasks" => {
             handle_tasks(request, auth_guard);
         }
         "telemetry" => {
-            handle_telemetry(app_data, request, auth_guard);
+            handle_telemetry(request, auth_guard);
         }
         "telemetry_data" => {
             if let Some(err) = handle_telemetry_data(request, auth_guard).err() {
-                log::error!(
-                    "[Error] (route_request) telemetry_data route failed: {}",
-                    err
-                );
+                log::error!("(route_request) telemetry_data route failed: {}", err);
             };
         }
         "image" => {
             if let Some(err) = handle_image(request, auth_guard, matched.params()).err() {
-                log::error!("[Error] (route_request) image route failed: {}", err);
+                log::error!("(route_request) image route failed: {}", err);
             };
         }
         _ => {
@@ -135,7 +132,7 @@ fn handle_oauth_login(
     request: Request,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(e) = SESSION_MGR.get_session_id(&request).err() {
-        log::info!("[Info] (handle_login) session error: {:?}", e);
+        log::info!("(handle_login) session error: {:?}", e);
         let next_uri = request
             .headers()
             .iter()
@@ -198,7 +195,7 @@ fn handle_oauth_authorise(request: Request) {
     let session_id = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => session_id,
         Err(e) => {
-            log::warn!("[Warn] (handle_authorise) session error: {:?}", e);
+            log::warn!("(handle_authorise) session error: {:?}", e);
             serve_error(request, tiny_http::StatusCode(400), "Bad request");
             return;
         }
@@ -389,7 +386,7 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             user.credentials.id_token = None;
             user.updatedAt = Utc::now();
             drop(user_db);
-            log::info!("[Info] (handle_revoke) revoked access/refresh token");
+            log::info!("(handle_revoke) revoked access/refresh token");
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
                 tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin")
@@ -398,10 +395,7 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             response
         }
         Err(e) => {
-            log::error!(
-                "[Error] (handle_revoke) error revoking access/refresh token, {}",
-                e
-            );
+            log::error!("(handle_revoke) error revoking access/refresh token, {}", e);
             serve_error(
                 request,
                 tiny_http::StatusCode(500),
@@ -427,12 +421,11 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
     dispatch_response(request, response);
 }
 
-fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
         Ok(auth_guard) => {
             let mut context = Context::new();
-            context.insert("profile_image", &auth_guard.user.photo);
-            context.insert("user", &true);
+            context.insert("profile", &auth_guard.user.photo);
             context
         }
         Err(_) => Context::new(),
@@ -456,8 +449,7 @@ fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<Val
         }
     };
     let mut context = Context::new();
-    context.insert("user", &true);
-    context.insert("profile_image", &auth_guard.user.photo);
+    context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -494,7 +486,7 @@ fn handle_sync(
         .as_secs()
         > credentials.expires_in
     {
-        log::info!("[Info] (handle_sync) token expired, should refresh");
+        log::info!("(handle_sync) token expired, should refresh");
         credentials = refresh_token(
             &app_data,
             credentials
@@ -536,8 +528,7 @@ fn handle_sync(
     TASK_BOARD.reset();
     let mut context = Context::new();
     if new_set.len() == 0 && deleted_set.len() == 0 {
-        context.insert("user", &true);
-        context.insert("profile_image", &auth_guard.user.photo);
+        context.insert("profile", &auth_guard.user.photo);
         let rendered = TEMPLATES.render("sync.html.tera", &context);
         let response = Response::from_data(rendered);
         dispatch_response(request, response);
@@ -545,10 +536,7 @@ fn handle_sync(
     }
     let queue = Arc::new(TaskQueue::new());
     if new_set.len() > 0 {
-        log::info!(
-            "[Info] (handle_sync) found {} new media items",
-            new_set.len()
-        );
+        log::info!("(handle_sync) found {} new media items", new_set.len());
         for media_item in gg_mediaitems.iter() {
             if new_set.contains(&media_item.id) {
                 queue.push(Task {
@@ -562,7 +550,7 @@ fn handle_sync(
     }
     if deleted_set.len() > 0 {
         log::info!(
-            "[Info] (handle_sync) found {} deleted media items",
+            "(handle_sync) found {} deleted media items",
             deleted_set.len()
         );
         for media_item_id in deleted_set.iter() {
@@ -579,7 +567,7 @@ fn handle_sync(
         let queue = queue.clone();
         thread::spawn(move || loop {
             if queue.is_empty() {
-                log::info!("[Info] (handle_sync) queue is empty, nothing to do");
+                log::info!("(handle_sync) queue is empty, nothing to do");
                 break;
             }
             let task = queue.pop();
@@ -587,21 +575,21 @@ fn handle_sync(
             let mut dbclient = match CONNECTION_POOL.get_client() {
                 Ok(dbclient) => dbclient,
                 Err(err) => {
-                    log::error!("[Error] (handle_sync): {err}");
+                    log::error!("(handle_sync): {err}");
                     TASK_BOARD.set_board_data(task.id, Status::Failed);
                     continue;
                 }
             };
             match task.data {
                 TaskData::MediaItem(task_data) => {
-                    log::info!("[Info] (handle_sync) retrieving photo");
+                    log::info!("(handle_sync) retrieving photo");
                     match get_photo(&task_data)
                         .and_then(|data| {
-                            log::info!("[Info] (handle_sync) encoding image");
+                            log::info!("(handle_sync) encoding image");
                             Ok(encode_image(&data))
                         })
                         .and_then(|data| {
-                            log::info!("[Info] (handle_sync) adding media item to db");
+                            log::info!("(handle_sync) adding media item to db");
                             Ok(dbclient.add_record(AlbumRecord {
                                 item_id: task_data.id,
                                 product_url: task_data.productUrl,
@@ -611,17 +599,17 @@ fn handle_sync(
                         }) {
                         Ok(_) => {}
                         Err(err) => {
-                            log::error!("[Error] (handle_sync): {err}");
+                            log::error!("(handle_sync): {err}");
                             TASK_BOARD.set_board_data(task.id, Status::Failed);
                         }
                     };
                 }
                 TaskData::String(task_data) => {
-                    log::info!("[Info] (handle_sync) removing record from db");
+                    log::info!("(handle_sync) removing record from db");
                     match dbclient.remove_record(task_data) {
                         Ok(_) => {}
                         Err(err) => {
-                            log::error!("[Error] (handle_sync): {err}");
+                            log::error!("(handle_sync): {err}");
                             TASK_BOARD.set_board_data(task.id, Status::Failed);
                         }
                     };
@@ -631,9 +619,8 @@ fn handle_sync(
             TASK_BOARD.set_board_data(task.id, Status::Completed);
         });
     }
-    log::info!("[Info] (handle_sync) {} sync thread(s) dispatched", threads);
-    context.insert("user", &true);
-    context.insert("profile_image", &auth_guard.user.photo);
+    log::info!("(handle_sync) {} sync thread(s) dispatched", threads);
+    context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("sync.html.tera", &Context::new());
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -660,7 +647,7 @@ fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-fn handle_telemetry(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_telemetry(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
         Err(_) => {
@@ -674,8 +661,7 @@ fn handle_telemetry(app_data: AppState, request: Request, auth_guard: AuthGuard<
         }
     };
     let mut context = Context::new();
-    context.insert("profile_image", &auth_guard.user.photo);
-    context.insert("user", &true);
+    context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("telemetry.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -915,6 +901,6 @@ where
         response.data_length().expect("This should not fail"),
     );
     if let Err(e) = request.respond(response) {
-        log::error!("[Error] (dispatch_reponse) could not send response: {}", e);
+        log::error!("(dispatch_reponse) could not send response: {}", e);
     }
 }

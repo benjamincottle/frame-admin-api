@@ -14,7 +14,7 @@ lazy_static! {
             tasks: BTreeMap::new(),
             next_task_id: 0,
         };
-        log::info!("[Info] (task_mgr) task board created");
+        log::info!("task board created");
         Mutex::new(task_board)
     };
 }

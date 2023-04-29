@@ -134,7 +134,7 @@ impl ValidUser {
                     })
             });
         if token.is_none() {
-            log::warn!("Missing token, user not logged in");
+            log::warn!("missing token, user not logged in");
             return Err(AuthError::MissingToken);
         }
         let token = token.unwrap();
@@ -153,7 +153,7 @@ impl ValidUser {
                     .find(|user| user.id == token.claims.sub.to_owned());
 
                 if user.is_none() {
-                    log::warn!("User belonging to this token no longer exists");
+                    log::warn!("user belonging to this token no longer exists");
                     return Err(AuthError::InvalidToken);
                 }
 
@@ -162,7 +162,7 @@ impl ValidUser {
                 })
             }
             Err(_) => {
-                log::warn!("Invalid token or user doesn't exist");
+                log::warn!("invalid token or user doesn't exist");
                 return Err(AuthError::InvalidToken);
             }
         }

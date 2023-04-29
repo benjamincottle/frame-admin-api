@@ -13,7 +13,7 @@ lazy_static! {
             sessions: HashMap::new(),
             session_duration: Duration::new(3600, 0),
         };
-        log::info!("[Info] (session_mgr) session manager created");
+        log::info!("session manager created");
         Mutex::new(session_mgr)
     };
 }
