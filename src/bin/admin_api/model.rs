@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, path::PathBuf,
 };
 
 use crate::{config, google_oauth::OAuthCreds};
@@ -15,29 +15,32 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn init(filename: &str) -> AppState {
-        match File::open(filename) {
+    pub fn init(config_dir: &str) -> AppState {
+        let config_path = PathBuf::from(config_dir).join("user_db.json");
+        match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
                 let db = ureq::serde_json::from_reader(reader).unwrap();
+                log::info!("appstate initialised");
                 AppState {
                     db: Arc::new(Mutex::new(db)),
-                    env: config::Config::init(),
+                    env: config::Config::init(config_dir),
                 }
             }
             Err(e) => {
-                log::info!("couldn't open user_db file: {}", e);
+                log::warn!("couldn't open user_db file: {}", e);
                 AppState {
                     db: Arc::new(Mutex::new(Vec::new())),
-                    env: config::Config::init(),
+                    env: config::Config::init(config_dir),
                 }
             }
         }
     }
 
-    pub fn save(&self, filename: &str) {
+    pub fn save(&self, config_dir: &str) {
         let db = self.db.lock().unwrap();
-        let file = File::create(filename).expect("couldn't create user_db file");
+        let config_path = PathBuf::from(config_dir).join("user_db.json");
+        let file = File::create(config_path).expect("couldn't create user_db file");
         let writer = BufWriter::new(file);
         ureq::serde_json::to_writer_pretty(writer, &db.clone())
             .expect("couldn't write user_db to file");

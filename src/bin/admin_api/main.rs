@@ -11,6 +11,7 @@ mod template_mgr;
 use frame::database::CONNECTION_POOL;
 
 use crate::{
+    config::Config,
     model::AppState,
     route_handler::{route_request, serve_error},
     session_mgr::SESSION_MGR,
@@ -18,8 +19,6 @@ use crate::{
     template_mgr::TEMPLATES,
 };
 
-use dotenv;
-use env_logger;
 use log;
 use std::{
     env,
@@ -38,17 +37,16 @@ fn main() {
     if env::var_os("RUST_BACKTRACE").is_none() {
         env::set_var("RUST_BACKTRACE", "1");
     }
-    dotenv::from_path("secrets/.env").ok();
     env_logger::init();
+    let app_data = AppState::init("secrets/");
+    Config::save(&app_data.env, "secrets/");
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     log::info!(
         "🚀 server started successfully, listening on {}",
         server.server_addr()
     );
-    let app_data = AppState::init("secrets/user_db.json");
-    let database_url = &env::var("POSTGRES_CONNECTION_STRING").expect("previously validated");
     let pool_size = 4;
-    match CONNECTION_POOL.initialise(database_url, pool_size) {
+    match CONNECTION_POOL.initialise(&app_data.env.postgres_connection_string, pool_size) {
         Err(e) => {
             log::error!("failed to initialise connection pool: {:?}", e);
             exit(1);

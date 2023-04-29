@@ -328,7 +328,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         user_db.push(user_data.to_owned());
     }
     drop(user_db);
-    app_data.save("secrets/user_db.json");
+    app_data.save("secrets/");
     let jwt_secret = app_data.env.jwt_secret.to_owned();
     let now = Utc::now();
     let iat = now.timestamp() as usize;
@@ -449,6 +449,7 @@ fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<Val
         }
     };
     let mut context = Context::new();
+    context.insert("config", &app_data.env);
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);

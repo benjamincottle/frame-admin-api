@@ -2,6 +2,6 @@
 {% block title %}Config{% endblock %}
 {% block content %}
           <div class="layout">
-            <p>Hello world!</p>
+            <p>{{ config | json_encode(pretty=true) | safe }}</p>
           </div>
 {% endblock %}
