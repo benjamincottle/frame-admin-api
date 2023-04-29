@@ -614,7 +614,7 @@ fn handle_sync(
     }
     log::info!("(handle_sync) {} sync thread(s) dispatched", threads);
     context.insert("profile", &auth_guard.user.photo);
-    let rendered = TEMPLATES.render("sync.html.tera", &Context::new());
+    let rendered = TEMPLATES.render("sync.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
     Ok(())
