@@ -12,8 +12,9 @@ pub struct MediaItem {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct SearchResult {
-    mediaItems: Vec<MediaItem>,
+pub struct SearchResult<T> {
+    #[serde(alias = "albums", alias = "mediaItems")]
+    result: Vec<T>,
     nextPageToken: Option<String>,
 }
 
@@ -29,14 +30,14 @@ pub fn get_mediaitems(
             "pageToken": page_token,
             "pageSize": 100,
         });
-        let response: SearchResult =
+        let response: SearchResult<MediaItem> =
             ureq::post("https://photoslibrary.googleapis.com/v1/mediaItems:search")
                 .set("Authorization", format!("Bearer {}", access_token).as_str())
                 .set("Content-Type", "Content-type: application/json")
                 .send_json(&body)?
                 .into_json()?;
 
-        for media_item in response.mediaItems {
+        for media_item in response.result {
             media_item_list.insert(media_item);
         }
         match response.nextPageToken.is_some() {
@@ -73,4 +74,39 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
         }
     };
     Ok(dimage)
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PhotoAlbum {
+    id: String,
+    title: String,
+    productUrl: String,
+    coverPhotoBaseUrl: String,
+    coverPhotoMediaItemId: String,
+    mediaItemsCount: String
+}
+
+pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, ureq::Error> {
+    let mut album_list = Vec::new();
+    let mut page_token = "".to_string();
+    loop {
+        let response: SearchResult<PhotoAlbum> =
+            ureq::get("https://photoslibrary.googleapis.com/v1/albums")
+                .set("Authorization", format!("Bearer {}", access_token).as_str())
+                .set("Content-Type", "Content-type: application/json")
+                .query_pairs(vec![
+                    ("pageToken", page_token.as_str()),
+                    ("pageSize", "50"),
+                ])
+                .call()?
+                .into_json()?;
+        for album in response.result {
+            album_list.push(album);
+        }
+        match response.nextPageToken.is_some() {
+            true => page_token = response.nextPageToken.expect("This should never fail"),
+            false => break,
+        }
+    }
+    Ok(album_list)
 }

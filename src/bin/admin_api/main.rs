@@ -20,6 +20,7 @@ use crate::{
 };
 
 use log;
+use dotenv::dotenv;
 use std::{
     env,
     io::{stdin, BufRead},
@@ -37,9 +38,9 @@ fn main() {
     if env::var_os("RUST_BACKTRACE").is_none() {
         env::set_var("RUST_BACKTRACE", "1");
     }
+    dotenv::from_filename("secrets/.env").ok();
     env_logger::init();
     let app_data = AppState::init("secrets/");
-    Config::save(&app_data.env, "secrets/");
     let pool_size = 4;
     match CONNECTION_POOL.initialise(&app_data.env.postgres_connection_string, pool_size) {
         Err(e) => {
@@ -51,6 +52,7 @@ fn main() {
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
+    // Config::save(&app_data.env, "secrets/");
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     log::info!(
         "🚀 server started successfully, listening on {}",

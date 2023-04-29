@@ -99,6 +99,14 @@
         width: 440px;
         height: 380px;
       }
+      form input[type="text"],
+      form select {
+        display: block;
+        background: #25282D;
+        color: var(--text-color);
+        border: 1px solid var(--text-color);
+        margin-bottom: 10px;
+      }
     </style>
   </head>
   <body>
@@ -149,11 +157,13 @@
         <div>
           <a href="{{ url_for(name='login') }}"><button type="button">Login</button></a>
         </div>
-{% else %}        
+{% else %}
         <div>
-          <a href="{{ url_for(name='config') }}"><button type="button">Config</button></a>
-          <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
+{% if not config %}        
           <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
+          <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
+{% endif %}
+          <a href="{{ url_for(name='config') }}"><button type="button">Config</button></a>
           <a href="{{ url_for(name='logout') }}"><button type="button">Logout</button></a>
           <a href="{{ url_for(name='revoke') }}"><button type="button">Revoke</button></a>    
         </div>
@@ -170,10 +180,9 @@
             <img class="profile_image" src="{{ profile }}" alt="">
           </a>
         </div>
-{% endif %}
+{% endif %}        
       </div>
     </section>
-
     <section class="layout_column">
       <div>
         {% block content %} {% endblock %}

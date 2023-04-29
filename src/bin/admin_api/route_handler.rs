@@ -6,7 +6,7 @@ use crate::{
         get_google_user, refresh_token, request_token, revoke_token, AuthGuard, JWTParser,
         OAuthCreds, ValidUser,
     },
-    gphotos_api::{get_mediaitems, get_photo},
+    gphotos_api::{get_album_list, get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims, User},
     session_mgr::{SessionID, SESSION_MGR},
@@ -94,7 +94,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             handle_oauth_revoke(app_data, request, auth_guard);
         }
         "index" => {
-            handle_index(request, auth_guard);
+            handle_index(app_data, request, auth_guard);
         }
         "config" => {
             handle_config(app_data, request, auth_guard);
@@ -413,11 +413,20 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
     dispatch_response(request, response);
 }
 
-fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
         Ok(auth_guard) => {
             let mut context = Context::new();
             context.insert("profile", &auth_guard.user.photo);
+            if app_data.env.google_photos_album_id.is_empty() {
+                let mut response = Response::empty(tiny_http::StatusCode(302));
+                response.add_header(
+                    tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/config")
+                        .expect("This should never fail"),
+                );
+                dispatch_response(request, response);
+                return;
+            }
             context
         }
         Err(_) => Context::new(),
@@ -427,7 +436,11 @@ fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_config(
+    app_data: AppState,
+    request: Request,
+    auth_guard: AuthGuard<ValidUser>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
         Err(_) => {
@@ -437,15 +450,66 @@ fn handle_config(app_data: AppState, request: Request, auth_guard: AuthGuard<Val
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);
-            return;
+            return Ok(())
         }
     };
     let mut context = Context::new();
-    context.insert("config", &app_data.env);
+    if app_data.env.google_photos_album_id.is_empty() {
+        let user_id = auth_guard.user.id;
+        let mut user_db = app_data.db.lock().unwrap();
+        let user = user_db
+            .iter_mut()
+            .find(|user| user.id == user_id)
+            .expect("auth_guard is Ok");
+        let mut credentials = user.credentials.clone();
+
+        if SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs()
+            > credentials.expires_in
+        {
+            log::info!("(handle_sync) token expired, should refresh");
+            credentials = refresh_token(
+                &app_data,
+                credentials
+                    .refresh_token
+                    .expect("refresh token is present")
+                    .as_str(),
+            )?;
+            let expires_in = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs()
+                + credentials.expires_in;
+            user.credentials.access_token = credentials.access_token.clone();
+            user.credentials.expires_in = expires_in;
+            user.credentials.scope = credentials.scope.clone();
+            user.credentials.token_type = credentials.token_type.clone();
+            user.updatedAt = Utc::now();
+        }
+        drop(user_db);
+        let access_token = credentials.access_token;
+        let album_list = match get_album_list(&access_token) {
+            Ok(album_list) => album_list,
+            Err(e) => {
+                log::error!("(handle_config) error getting album list, {}", e);
+                serve_error(
+                    request,
+                    tiny_http::StatusCode(500),
+                    "Internal server error: error getting album list",
+                );
+                return Ok(())
+            }
+        };
+        context.insert("config", &app_data.env);
+        context.insert("album_list", &album_list);
+    }
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
+    Ok(())
 }
 
 fn handle_sync(
