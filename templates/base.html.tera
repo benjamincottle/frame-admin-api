@@ -45,13 +45,6 @@
         flex-direction: row;
         justify-content: space-between;
       }
-      .dog {
-        fill-opacity: 0.5;
-        transition: fill-opacity 0.3s ease-in-out;
-      }
-      .dog:hover {
-        fill-opacity: 0.76;
-      }
       .profile_image {
         background-size: 32px 32px;
         display: block;
@@ -92,23 +85,29 @@
         background-color: #909090;
         color: #121212;
       }
-      #l_dog {
+      #l_dog_svg {
+        opacity: 0.5;
         width: 44px;
         height: 38px;
+        transition: opacity 0.3s ease-in-out;        
       }
-      #fp_dog {
+      #l_dog_svg:hover {
+        opacity: 0.76;
+      }
+      #fp_dog_svg {
+        opacity: 0.1;
         width: 440px;
         height: 380px;
-      }      
+      }
     </style>
   </head>
   <body>
     <section class="header">
       <div>
         <a href="{{ url_for(name='index') }}" style="opac">
-          <svg id="l_dog" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
+          <svg id="l_dog_svg" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
             <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none">
-              <path class="dog" d="M1540 5170 c-73 -20 -144 -81 -232 -201 -81 -110 -227 -359 -211
+              <path id="l_dog_path" d="M1540 5170 c-73 -20 -144 -81 -232 -201 -81 -110 -227 -359 -211
               -359 4 0 2 -4 -4 -8 -29 -18 -188 -395 -230 -542 -29 -106 -24 -385 10 -556
               32 -155 63 -250 112 -342 19 -36 35 -73 35 -82 0 -21 -102 -229 -183 -373 -37
               -64 -74 -139 -83 -165 -25 -69 -22 -258 6 -462 28 -201 30 -402 7 -507 -26
