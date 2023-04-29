@@ -63,9 +63,10 @@
         padding-left: 50px;
         padding-right: 50px;
       }
-      .grow { 
+      .grow {
+        max-width: 50%;
         flex-grow: 1;
-        max-width: 800px;
+        
        }
       .img-fluid {
         max-width: 100%;
@@ -88,9 +89,6 @@
         transition: opacity 0.3s ease-in-out;
         opacity: 0.6;
       }
-      canvas:hover {
-        opacity: 0.76;
-      }      
     </style>    
 {% endblock %}
 {% block tel_js %}
@@ -100,7 +98,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 {% endblock %}
 {% block content %}
-        <div class="imgchartrow">
+        <div class="layout_toprow">
           <div>
             <a href ="#" id="link" target="_">
               <canvas id="photo"></canvas>
@@ -109,25 +107,25 @@
           <div id="chart" class="grow"></div>
         </div>
         <div class="dtable">
-        <table id="data" class="display">
-            <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Item Id</th>
-                <th>Product Url</th>                
-                <th>Chip ID</th>
-                <th>UUID Number</th>
-                <th>Batt Voltage</th>
-                <th>Boot Code</th>
-                <th>Error Code</th>
-                <th>Return Code</th>
-                <th>Write Bytes</th>
-                <th>Remote Addr</th>
-            </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        </table>
+          <table id="data" class="display">
+              <thead>
+              <tr>
+                  <th>Timestamp</th>
+                  <th>Item Id</th>
+                  <th>Product Url</th>                
+                  <th>Chip ID</th>
+                  <th>UUID Number</th>
+                  <th>Batt Voltage</th>
+                  <th>Boot Code</th>
+                  <th>Error Code</th>
+                  <th>Return Code</th>
+                  <th>Write Bytes</th>
+                  <th>Remote Addr</th>
+              </tr>
+              </thead>
+              <tbody>
+              </tbody>
+          </table>
         </div>
 {% endblock %}
 {% block scripts %}

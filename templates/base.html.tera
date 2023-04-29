@@ -18,6 +18,7 @@
         margin: 0px;
         background-color: var(--background-color);
         color: var(--text-color);
+        min-width: 1200px;
       }    
       .layout_column {
         padding: 10px;
@@ -36,6 +37,17 @@
         align-items: center;
         background: linear-gradient(to bottom, #1d2a39, #1F2227);
       }
+      .layout_toprow {
+        width: 100%;
+        padding-top: 15px;
+        padding-left: 15px;
+        padding-right: 15px;
+        margin: 0px;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+      }      
       .fp_layout {
         width: 100%;
         padding-top: 64px;
