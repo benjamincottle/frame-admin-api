@@ -168,7 +168,7 @@
                 <path d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2" fill="#E92D18"></path>
               </svg>
             </div>
-            <img class="profile_image" src="{{ profile_image }}" alt="">
+            <img class="profile_image" src="{{ profile }}" alt="">
           </a>
         </div>
 {% endif %}
