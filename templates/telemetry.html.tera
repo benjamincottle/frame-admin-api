@@ -50,21 +50,23 @@
         select {
         color: #777777;
       }
-      .imgchartrow {
-        padding-left: 75px;
-        padding-right: 75px;
+      .layout_toprow {
+        padding-top: 15px;
+        padding-left: 15px;
+        padding-right: 15px;
+        margin: 0px;
         display: flex;
         flex-direction: row;
         justify-content: space-around;
         align-items: center;
-      }
+      }     
       .dtable {
         padding-top: 10px;
         padding-left: 50px;
         padding-right: 50px;
       }
       .grow {
-        max-width: 50%;
+        max-width: 60%;
         flex-grow: 1;
         
        }
