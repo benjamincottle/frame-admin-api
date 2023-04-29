@@ -97,7 +97,9 @@ pub fn route_request(app_data: AppState, request: Request) {
             handle_index(app_data, request, auth_guard);
         }
         "config" => {
-            handle_config(app_data, request, auth_guard);
+            if let Some(err) = handle_config(app_data, request, auth_guard).err() {
+                log::error!("(route_request) sync route failed: {}", err);
+            };
         }
         "sync" => {
             if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
@@ -453,6 +455,26 @@ fn handle_config(
             return Ok(())
         }
     };
+    match request
+        .headers()
+        .iter()
+        .find(|header| header.field.as_str() == "Google-Photos-Album-ID")
+    {
+        Some(album_id) => {
+            let body = album_id.value.to_string();
+            let rendered = body.as_bytes();
+            let response = Response::empty(tiny_http::StatusCode(200))
+            .with_data(rendered, Some(rendered.len()))
+            .with_header(
+                tiny_http::Header::from_str("Content-Type: application/json")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
+            return Ok(())
+        },
+        _ => {}
+    };
+
     let mut context = Context::new();
     if app_data.env.google_photos_album_id.is_empty() {
         let user_id = auth_guard.user.id;

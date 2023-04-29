@@ -2,13 +2,13 @@
 {% block title %}Config{% endblock %}
 {% block content %}
           <div>
-            <p>{{ config | json_encode(pretty=true) | safe }}</p>
-            <p>{{ album_list | json_encode(pretty=true) | safe }}</p>            
-          </div>
-          <div>
             <label for="google_photos_album_id">Google Photos Album ID:</label>
             <input type="text" id="google_photos_album_id" name="google_photos_album_id">
             <input type="button" value="Submit" onclick="submitForm()">
+          </div>
+          <div>
+            <p>{{ config | json_encode(pretty=true) | safe }}</p>
+            <p>{{ album_list | json_encode(pretty=true) | safe }}</p>            
           </div>
 {% endblock %}
 {% block scripts %}
@@ -16,7 +16,7 @@
 function submitForm() {
   const google_photos_album_id = document.getElementById("google_photos_album_id").value;
   const xhr = new XMLHttpRequest();
-  xhr.open("GET", "/frame_admin/config_data");
+  xhr.open("GET", "/frame_admin/config");
   xhr.setRequestHeader("Google-Photos-Album-ID", google_photos_album_id);
   xhr.onload = function() {
     if (xhr.status === 200) {

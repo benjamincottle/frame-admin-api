@@ -20,7 +20,6 @@ use crate::{
 };
 
 use log;
-use dotenv::dotenv;
 use std::{
     env,
     io::{stdin, BufRead},
@@ -52,7 +51,7 @@ fn main() {
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
-    // Config::save(&app_data.env, "secrets/");
+    Config::save(&app_data.env, "secrets/");
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     log::info!(
         "🚀 server started successfully, listening on {}",
