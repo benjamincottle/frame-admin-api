@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, env, io::Read};
+use std::{collections::HashSet, io::Read};
 
 #[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
 pub struct MediaItem {

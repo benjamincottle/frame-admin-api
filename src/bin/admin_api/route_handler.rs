@@ -21,7 +21,6 @@ use route_recognizer::{Params, Router};
 use std::{
     cmp::min,
     collections::{HashMap, HashSet},
-    env,
     fs::File,
     io::Read,
     net::{IpAddr, Ipv4Addr, SocketAddr},
