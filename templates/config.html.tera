@@ -40,15 +40,12 @@
     </style>
 {% endblock head %}
 {% block content %}
-          <div>
-            <button type="button" onclick="getAlbumList()">Get Albums</button>
-          </div>
           <div id="album_list" class="p_layout">
           </div>
 {% endblock content %}
 {% block scripts %}
 <script>
-function getAlbumList() {
+window.onload = function () {
   const album_list = {{ album_list | json_encode(pretty=true) | safe }}
   const selected_albums = {{ selected_albums | json_encode(pretty=true) | safe }}
   const album_list_div = document.getElementById("album_list");
@@ -70,7 +67,7 @@ function getAlbumList() {
     album_div.innerHTML = html;
     album_list_div.appendChild(album_div);
   }
-}
+};
 
 function toggle_selection(fieldset) {
   let album_id = fieldset;

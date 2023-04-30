@@ -395,10 +395,19 @@ fn handle_config(
         .find(|header| header.field.as_str() == "Google-Photos-Album-ID")
     {
         Some(album_id) => {
-            let body = album_id.value.to_string();
-            let rendered = body.as_bytes();
-            let response = Response::empty(tiny_http::StatusCode(200))
-                .with_data(rendered, Some(rendered.len()))
+            let mut env = app_data.env.lock().unwrap();
+            if env.google_photos_album_ids.contains(&album_id.value.to_string()) {
+                env.google_photos_album_ids.retain(|id| id != &album_id.value);
+            } else {
+                env.google_photos_album_ids.push(album_id.value.clone().to_string());
+            }
+            let google_photos_album_list = env.google_photos_album_ids.clone();
+            drop(env);
+            app_data.save("secrets/");
+
+            // TODO: replace with empty 200 response
+            let album_list = ureq::serde_json::to_string(&google_photos_album_list).unwrap();
+            let response = Response::from_string(album_list)
                 .with_header(
                     tiny_http::Header::from_str("Content-Type: application/json")
                         .expect("This should never fail"),
