@@ -11,7 +11,6 @@ mod template_mgr;
 use frame::database::CONNECTION_POOL;
 
 use crate::{
-    config::Config,
     model::AppState,
     route_handler::{route_request, serve_error},
     session_mgr::SESSION_MGR,
@@ -51,7 +50,7 @@ fn main() {
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
-    Config::save(&app_data.env, "secrets/");
+    app_data.env.save("secrets/");
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     log::info!(
         "🚀 server started successfully, listening on {}",

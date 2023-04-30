@@ -1,12 +1,13 @@
 use crate::model::{AppState, TokenClaims, User};
 
+use chrono::Utc;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
     error::Error,
     sync::{Arc, Mutex},
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use tiny_http::Request;
 
@@ -35,7 +36,7 @@ pub struct GoogleUserResult {
 pub fn request_token(
     app_data: &AppState,
     authorization_code: &str,
-) -> Result<OAuthCreds, Box<dyn Error>> {
+) -> Result<String, Box<dyn Error>> {
     let redirect_url = app_data.env.google_oauth_redirect_url.to_owned();
     let client_secret = app_data.env.google_oauth_client_secret.to_owned();
     let client_id = app_data.env.google_oauth_client_id.to_owned();
@@ -47,19 +48,80 @@ pub fn request_token(
         ));
     if response.is_ok() {
         let oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
-        Ok(oauth_creds)
+
+        let parser = JWTParser::new(&client_id).unwrap();
+        let claims = parser
+            .parse::<TokenClaims>(&oauth_creds.id_token.clone().unwrap())
+            .unwrap();
+        let google_user = get_google_user(&oauth_creds.access_token)?;
+        let mut user_db = app_data.db.lock().unwrap();
+        let email = google_user.email.to_lowercase();
+        let user = user_db.iter_mut().find(|user| user.email == email);
+        let current_datetime = Utc::now();
+        let expires_in = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs()
+            + oauth_creds.expires_in;
+        let user_id: String;
+
+        if user.is_some() {
+            let user = user.expect("user is some");
+            user_id = user.id.clone();
+            user.email = email.to_owned();
+            user.photo = google_user.picture;
+            user.updatedAt = current_datetime;
+            let refresh_token = match oauth_creds.refresh_token.clone() {
+                Some(refresh_token) => Some(refresh_token),
+                None => user.credentials.refresh_token.clone(),
+            };
+            user.credentials = OAuthCreds {
+                access_token: oauth_creds.access_token.clone(),
+                expires_in,
+                id_token: oauth_creds.id_token.clone(),
+                scope: oauth_creds.scope.clone(),
+                token_type: oauth_creds.token_type.clone(),
+                refresh_token,
+            };
+        } else {
+            user_id = claims.sub;
+            let user_data = User {
+                id: user_id.clone(),
+                name: google_user.name,
+                email,
+                verified: google_user.verified_email,
+                credentials: OAuthCreds {
+                    access_token: oauth_creds.access_token.clone(),
+                    expires_in,
+                    id_token: oauth_creds.id_token.clone(),
+                    scope: oauth_creds.scope.clone(),
+                    token_type: oauth_creds.token_type.clone(),
+                    refresh_token: oauth_creds.refresh_token.clone(),
+                },
+                photo: google_user.picture,
+                createdAt: current_datetime,
+                updatedAt: current_datetime,
+            };
+            user_db.push(user_data.to_owned());
+        }
+        drop(user_db);
+        app_data.save("secrets/");
+
+        Ok(user_id)
     } else {
         let message = "An error occurred while trying to retrieve the access token";
         Err(From::from(message))
     }
 }
 
-pub fn refresh_token(
-    app_data: &AppState,
-    refresh_token: &str,
-) -> Result<OAuthCreds, Box<dyn Error>> {
+pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box<dyn Error>> {
     let client_secret = app_data.env.google_oauth_client_secret.to_owned();
     let client_id = app_data.env.google_oauth_client_id.to_owned();
+    let refresh_token = user
+        .credentials
+        .refresh_token
+        .to_owned()
+        .expect("refresh token should be present");
     let response = ureq::post("https://oauth2.googleapis.com/token")
         .set("Content-Type", "application/x-www-form-urlencoded")
         .send_string(&format!(
@@ -67,7 +129,25 @@ pub fn refresh_token(
             client_id, client_secret, refresh_token
         ));
     if response.is_ok() {
-        let oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
+        let mut oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
+        let expires_in = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_secs()
+            + oauth_creds.expires_in;
+        oauth_creds.expires_in = expires_in;
+        let mut user_db = app_data.db.lock().unwrap();
+        let user_to_update = user_db
+            .iter_mut()
+            .find(|user_to_update| user_to_update.id == user.id)
+            .expect("auth_guard was Ok");
+        user_to_update.credentials.access_token = oauth_creds.access_token.clone();
+        user_to_update.credentials.expires_in = oauth_creds.expires_in;
+        user_to_update.credentials.scope = oauth_creds.scope.clone();
+        user_to_update.credentials.token_type = oauth_creds.token_type.clone();
+        user_to_update.updatedAt = Utc::now();
+        drop(user_db);
+        app_data.save("secrets/");
         Ok(oauth_creds)
     } else {
         let message = "An error occurred while trying to refresh the access token";
@@ -75,10 +155,22 @@ pub fn refresh_token(
     }
 }
 
-pub fn revoke_token(access_token: &str) -> Result<(), ureq::Error> {
+pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), ureq::Error> {
     ureq::post("https://oauth2.googleapis.com/revoke")
         .set("Content-Type", "application/x-www-form-urlencoded")
-        .send_string(&format!("token={}", access_token))?;
+        .send_string(&format!("token={}", user.credentials.access_token))?;
+    let mut user_db = app_data.db.lock().unwrap();
+    let user_to_update = user_db
+        .iter_mut()
+        .find(|user_to_update| user_to_update.id == user.id)
+        .expect("auth_guard was Ok");
+    user_to_update.credentials.expires_in = 0;
+    user_to_update.credentials.refresh_token = None;
+    user_to_update.credentials.id_token = None;
+    user_to_update.updatedAt = Utc::now();
+    drop(user_db);
+    app_data.save("secrets/");
+    log::info!("(handle_revoke) revoked access/refresh token");
     Ok(())
 }
 
@@ -147,11 +239,10 @@ impl ValidUser {
 
         match decode {
             Ok(token) => {
-                let vec = app_data.db.lock().unwrap();
-                let user = vec
+                let user_db = app_data.db.lock().unwrap();
+                let user = user_db
                     .iter()
                     .find(|user| user.id == token.claims.sub.to_owned());
-
                 if user.is_none() {
                     log::warn!("user belonging to this token no longer exists");
                     return Err(AuthError::InvalidToken);

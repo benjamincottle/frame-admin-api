@@ -2,13 +2,10 @@ use chrono::{Duration, Utc};
 use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
 
 use crate::{
-    google_oauth::{
-        get_google_user, refresh_token, request_token, revoke_token, AuthGuard, JWTParser,
-        OAuthCreds, ValidUser,
-    },
+    google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
     gphotos_api::{get_album_list, get_mediaitems, get_photo},
     image_proc::{decode_image, encode_image},
-    model::{AppState, TokenClaims, User},
+    model::{AppState, TokenClaims},
     session_mgr::{SessionID, SESSION_MGR},
     task_mgr::{Action, Status, Task, TaskData, TaskQueue, TASK_BOARD},
     template_mgr::TEMPLATES,
@@ -66,7 +63,6 @@ pub fn route_request(app_data: AppState, request: Request) {
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
     router.add("/frame_admin/tasks", "tasks".to_string());
     router.add("/frame_admin/image/:id", "image".to_string());
-
     let matched = match router.recognize(url) {
         Ok(m) => m,
         Err(_) => {
@@ -241,7 +237,6 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let params = extract_params(request.url());
     let state = params.get("state");
     let code = params.get("code");
-    // let scope = params.get("scope");
     let error = params.get("error");
     if error.is_some() || state != Some(&session_state) || code.is_none() {
         log::error!("oauth2 error or state mismatch or code not found");
@@ -260,74 +255,11 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
         return;
     }
-    let token_response = token_response.expect("previously checked for error");
-    let parser = JWTParser::new(&app_data.env.google_oauth_client_id).unwrap();
-    let claims = parser
-        .parse::<TokenClaims>(&token_response.id_token.clone().unwrap())
-        .unwrap();
-    let google_user = get_google_user(&token_response.access_token);
-    if google_user.is_err() {
-        let message = google_user.err().expect("google_user is err").to_string();
-        log::error!("oauth2 error: {}", message);
-        serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
-        return;
-    }
-    let google_user = google_user.unwrap();
-    let mut user_db = app_data.db.lock().unwrap();
-    let email = google_user.email.to_lowercase();
-    let user = user_db.iter_mut().find(|user| user.email == email);
-    let expires_in = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("Time went backwards")
-        .as_secs()
-        + token_response.expires_in;
-    let user_id: String;
-    if user.is_some() {
-        let user = user.expect("user is some");
-        user_id = user.id.to_owned();
-        user.email = email.to_owned();
-        user.photo = google_user.picture;
-        user.updatedAt = Utc::now();
-        let refresh_token = match token_response.refresh_token {
-            Some(refresh_token) => Some(refresh_token),
-            None => user.credentials.refresh_token.clone(),
-        };
-        user.credentials = OAuthCreds {
-            access_token: token_response.access_token,
-            expires_in,
-            id_token: token_response.id_token,
-            scope: token_response.scope,
-            token_type: token_response.token_type,
-            refresh_token,
-        };
-    } else {
-        let datetime = Utc::now();
-        user_id = claims.sub;
-        let user_data = User {
-            id: user_id.clone(),
-            name: google_user.name,
-            email,
-            verified: google_user.verified_email,
-            credentials: OAuthCreds {
-                access_token: token_response.access_token,
-                expires_in,
-                id_token: token_response.id_token,
-                scope: token_response.scope,
-                token_type: token_response.token_type,
-                refresh_token: token_response.refresh_token,
-            },
-            photo: google_user.picture,
-            createdAt: datetime,
-            updatedAt: datetime,
-        };
-        user_db.push(user_data.to_owned());
-    }
-    drop(user_db);
-    app_data.save("secrets/");
+    let user_id = token_response.expect("token_response is not err");
+    let current_datetime = Utc::now();
     let jwt_secret = app_data.env.jwt_secret.to_owned();
-    let now = Utc::now();
-    let iat = now.timestamp() as usize;
-    let exp = (now + Duration::seconds(app_data.env.jwt_max_age)).timestamp() as usize;
+    let iat = current_datetime.timestamp() as usize;
+    let exp = (current_datetime + Duration::seconds(app_data.env.jwt_max_age)).timestamp() as usize;
     let claims: TokenClaims = TokenClaims {
         sub: user_id,
         exp,
@@ -367,20 +299,8 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             return;
         }
     };
-    let mut user_db = app_data.db.lock().unwrap();
-    let user = user_db
-        .iter_mut()
-        .find(|user| user.id == auth_guard.user.id)
-        .expect("auth_guard is Ok");
-    let credentials = user.credentials.clone();
-    let mut response = match revoke_token(credentials.access_token.as_str()) {
+    let mut response = match revoke_token(&app_data, &auth_guard.user) {
         Ok(_) => {
-            user.credentials.expires_in = 0;
-            user.credentials.refresh_token = None;
-            user.credentials.id_token = None;
-            user.updatedAt = Utc::now();
-            drop(user_db);
-            log::info!("(handle_revoke) revoked access/refresh token");
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
                 tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin")
@@ -452,7 +372,7 @@ fn handle_config(
                     .expect("This should never fail"),
             );
             dispatch_response(request, response);
-            return Ok(())
+            return Ok(());
         }
     };
     match request
@@ -464,27 +384,19 @@ fn handle_config(
             let body = album_id.value.to_string();
             let rendered = body.as_bytes();
             let response = Response::empty(tiny_http::StatusCode(200))
-            .with_data(rendered, Some(rendered.len()))
-            .with_header(
-                tiny_http::Header::from_str("Content-Type: application/json")
-                    .expect("This should never fail"),
-            );
+                .with_data(rendered, Some(rendered.len()))
+                .with_header(
+                    tiny_http::Header::from_str("Content-Type: application/json")
+                        .expect("This should never fail"),
+                );
             dispatch_response(request, response);
-            return Ok(())
-        },
+            return Ok(());
+        }
         _ => {}
     };
-
     let mut context = Context::new();
     if app_data.env.google_photos_album_id.is_empty() {
-        let user_id = auth_guard.user.id;
-        let mut user_db = app_data.db.lock().unwrap();
-        let user = user_db
-            .iter_mut()
-            .find(|user| user.id == user_id)
-            .expect("auth_guard is Ok");
-        let mut credentials = user.credentials.clone();
-
+        let mut credentials = auth_guard.user.credentials.clone();
         if SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -492,25 +404,8 @@ fn handle_config(
             > credentials.expires_in
         {
             log::info!("(handle_sync) token expired, should refresh");
-            credentials = refresh_token(
-                &app_data,
-                credentials
-                    .refresh_token
-                    .expect("refresh token is present")
-                    .as_str(),
-            )?;
-            let expires_in = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .expect("Time went backwards")
-                .as_secs()
-                + credentials.expires_in;
-            user.credentials.access_token = credentials.access_token.clone();
-            user.credentials.expires_in = expires_in;
-            user.credentials.scope = credentials.scope.clone();
-            user.credentials.token_type = credentials.token_type.clone();
-            user.updatedAt = Utc::now();
+            credentials = refresh_token(&app_data, &auth_guard.user)?;
         }
-        drop(user_db);
         let access_token = credentials.access_token;
         let album_list = match get_album_list(&access_token) {
             Ok(album_list) => album_list,
@@ -521,7 +416,7 @@ fn handle_config(
                     tiny_http::StatusCode(500),
                     "Internal server error: error getting album list",
                 );
-                return Ok(())
+                return Ok(());
             }
         };
         context.insert("config", &app_data.env);
@@ -551,14 +446,7 @@ fn handle_sync(
             return Ok(());
         }
     };
-    let user_id = auth_guard.user.id;
-    let mut user_db = app_data.db.lock().unwrap();
-    let user = user_db
-        .iter_mut()
-        .find(|user| user.id == user_id)
-        .expect("auth_guard is Ok");
-    let mut credentials = user.credentials.clone();
-
+    let mut credentials = auth_guard.user.credentials.clone();
     if SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("Time went backwards")
@@ -566,25 +454,8 @@ fn handle_sync(
         > credentials.expires_in
     {
         log::info!("(handle_sync) token expired, should refresh");
-        credentials = refresh_token(
-            &app_data,
-            credentials
-                .refresh_token
-                .expect("refresh token is present")
-                .as_str(),
-        )?;
-        let expires_in = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs()
-            + credentials.expires_in;
-        user.credentials.access_token = credentials.access_token.clone();
-        user.credentials.expires_in = expires_in;
-        user.credentials.scope = credentials.scope.clone();
-        user.credentials.token_type = credentials.token_type.clone();
-        user.updatedAt = Utc::now();
+        credentials = refresh_token(&app_data, &auth_guard.user)?;
     }
-    drop(user_db);
     let access_token = credentials.access_token;
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let db_set = dbclient.get_mediaitems_set()?;
