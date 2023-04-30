@@ -37,9 +37,11 @@ pub fn request_token(
     app_data: &AppState,
     authorization_code: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let redirect_url = app_data.env.google_oauth_redirect_url.to_owned();
-    let client_secret = app_data.env.google_oauth_client_secret.to_owned();
-    let client_id = app_data.env.google_oauth_client_id.to_owned();
+    let env = app_data.env.lock().unwrap();
+    let redirect_url = env.google_oauth_redirect_url.to_owned();
+    let client_secret = env.google_oauth_client_secret.to_owned();
+    let client_id = env.google_oauth_client_id.to_owned();
+    drop(env);
     let response = ureq::post("https://oauth2.googleapis.com/token")
         .set("Content-Type", "application/x-www-form-urlencoded")
         .send_string(&format!(
@@ -115,8 +117,10 @@ pub fn request_token(
 }
 
 pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box<dyn Error>> {
-    let client_secret = app_data.env.google_oauth_client_secret.to_owned();
-    let client_id = app_data.env.google_oauth_client_id.to_owned();
+    let env = app_data.env.lock().unwrap();
+    let client_secret = env.google_oauth_client_secret.to_owned();
+    let client_id = env.google_oauth_client_id.to_owned();
+    drop(env);
     let refresh_token = user
         .credentials
         .refresh_token
@@ -230,7 +234,9 @@ impl ValidUser {
             return Err(AuthError::MissingToken);
         }
         let token = token.unwrap();
-        let jwt_secret = app_data.env.jwt_secret.to_owned();
+        let env = app_data.env.lock().unwrap();
+        let jwt_secret = env.jwt_secret.to_owned();
+        drop(env);
         let decode = decode::<TokenClaims>(
             token,
             &DecodingKey::from_secret(jwt_secret.as_ref()),

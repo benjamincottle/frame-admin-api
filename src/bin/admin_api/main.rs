@@ -39,8 +39,11 @@ fn main() {
     dotenv::from_filename("secrets/.env").ok();
     env_logger::init();
     let app_data = AppState::init("secrets/");
+    let env = app_data.env.lock().unwrap();
+    let postgres_connection_string = env.postgres_connection_string.clone();
+    drop(env);
     let pool_size = 4;
-    match CONNECTION_POOL.initialise(&app_data.env.postgres_connection_string, pool_size) {
+    match CONNECTION_POOL.initialise(&postgres_connection_string, pool_size) {
         Err(e) => {
             log::error!("failed to initialise connection pool: {:?}", e);
             exit(1);
@@ -50,7 +53,7 @@ fn main() {
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
-    app_data.env.save("secrets/");
+    app_data.save("secrets/");
     let server = Server::http("0.0.0.0:5000").expect("This should not fail");
     log::info!(
         "🚀 server started successfully, listening on {}",

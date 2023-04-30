@@ -139,6 +139,9 @@ fn handle_oauth_login(
             .expect("next_uri is now some");
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
+        let env = app_data.env.lock().unwrap();
+        let jwt_max_age = env.jwt_max_age;
+        drop(env);
         let mut response = Response::empty(tiny_http::StatusCode(302));
         response
             .add_header(Header::from_str("Location: authorise").expect("This should never fail"));
@@ -146,7 +149,7 @@ fn handle_oauth_login(
             Header::from_str(&format!(
                 "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
                 session_id,
-                app_data.env.jwt_max_age
+                jwt_max_age
             ))
             .expect("This should never fail"),
         );
@@ -199,11 +202,15 @@ fn handle_oauth_authorise(app_data: AppState, request: Request) {
     };
     let state = SESSION_MGR.generate_state();
     SESSION_MGR.set_session_data(&session_id, "state", &state);
+    let env = app_data.env.lock().unwrap();
+    let google_oauth_client_id = &env.google_oauth_client_id.to_string();
+    let google_oauth_redirect_url = &env.google_oauth_redirect_url.to_string();
+    drop(env);
     let mut url =
         Url::parse("https://accounts.google.com/o/oauth2/v2/auth").expect("This should never fail");
     url.query_pairs_mut()
-        .append_pair("client_id", &app_data.env.google_oauth_client_id)
-        .append_pair("redirect_uri", &app_data.env.google_oauth_redirect_url)
+        .append_pair("client_id", &google_oauth_client_id)
+        .append_pair("redirect_uri", &google_oauth_redirect_url)
         .append_pair("response_type", "code")
         .append_pair(
             "scope",
@@ -257,9 +264,13 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     }
     let user_id = token_response.expect("token_response is not err");
     let current_datetime = Utc::now();
-    let jwt_secret = app_data.env.jwt_secret.to_owned();
+    let env = app_data.env.lock().unwrap();
+    let jwt_secret = env.jwt_secret.to_owned();
+    let jwt_max_age = env.jwt_max_age;
+    drop(env);
+    let jwt_secret = jwt_secret;
     let iat = current_datetime.timestamp() as usize;
-    let exp = (current_datetime + Duration::seconds(app_data.env.jwt_max_age)).timestamp() as usize;
+    let exp = (current_datetime + Duration::seconds(jwt_max_age)).timestamp() as usize;
     let claims: TokenClaims = TokenClaims {
         sub: user_id,
         exp,
@@ -275,7 +286,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     response.add_header(
         Header::from_str(&format!(
             "Set-Cookie: token={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            token, app_data.env.jwt_max_age
+            token, jwt_max_age
         ))
         .expect("This should never fail"),
     );
@@ -338,9 +349,12 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
 fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
         Ok(auth_guard) => {
+            let env = app_data.env.lock().unwrap();
+            let google_photos_album_ids = env.google_photos_album_ids.clone();
+            drop(env);
             let mut context = Context::new();
             context.insert("profile", &auth_guard.user.photo);
-            if app_data.env.google_photos_album_ids.is_empty() {
+            if google_photos_album_ids.is_empty() {
                 let mut response = Response::empty(tiny_http::StatusCode(302));
                 response.add_header(
                     tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/config")
@@ -394,8 +408,11 @@ fn handle_config(
         }
         _ => {}
     };
+    let env = app_data.env.lock().unwrap();
+    let google_photos_album_ids = env.google_photos_album_ids.clone();
+    drop(env);
     let mut context = Context::new();
-    if app_data.env.google_photos_album_ids.is_empty() {
+    if google_photos_album_ids.is_empty() {
         context.insert("config", &true);
     }
     let mut credentials = auth_guard.user.credentials.clone();
@@ -421,7 +438,7 @@ fn handle_config(
             return Ok(());
         }
     };
-    context.insert("selected_albums", &app_data.env.google_photos_album_ids);
+    context.insert("selected_albums", &google_photos_album_ids);
     context.insert("album_list", &album_list);
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
@@ -462,10 +479,13 @@ fn handle_sync(
     let db_set = dbclient.get_mediaitems_set()?;
     CONNECTION_POOL.release_client(dbclient);
     let mut gg_mediaitems: HashSet<MediaItem> = HashSet::new();
-    for album_id in app_data.env.google_photos_album_ids {
+    let env = app_data.env.lock().unwrap();
+    let google_photos_album_ids = env.google_photos_album_ids.clone();
+    drop(env);
+    for album_id in google_photos_album_ids {
         let album_mediaitems = get_mediaitems(&access_token, &album_id)?;
         gg_mediaitems.extend(album_mediaitems);
-    };
+    }
     let gg_set: HashSet<_> = gg_mediaitems
         .iter()
         .map(|media_item| media_item.id.clone())

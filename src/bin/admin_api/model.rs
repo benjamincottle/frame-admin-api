@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
-    sync::{Arc, Mutex}, path::PathBuf,
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
 use crate::{config, google_oauth::OAuthCreds};
@@ -11,7 +12,7 @@ use crate::{config, google_oauth::OAuthCreds};
 #[derive(Debug, Clone)]
 pub struct AppState {
     pub db: Arc<Mutex<Vec<User>>>,
-    pub env: config::Config,
+    pub env: Arc<Mutex<config::Config>>,
 }
 
 impl AppState {
@@ -24,14 +25,14 @@ impl AppState {
                 log::info!("appstate initialised");
                 AppState {
                     db: Arc::new(Mutex::new(db)),
-                    env: config::Config::init(config_dir),
+                    env: Arc::new(Mutex::new(config::Config::init(config_dir))),
                 }
             }
             Err(e) => {
                 log::warn!("couldn't open user_db file: {}", e);
                 AppState {
                     db: Arc::new(Mutex::new(Vec::new())),
-                    env: config::Config::init(config_dir),
+                    env: Arc::new(Mutex::new(config::Config::init(config_dir))),
                 }
             }
         }
@@ -44,6 +45,10 @@ impl AppState {
         let writer = BufWriter::new(file);
         ureq::serde_json::to_writer_pretty(writer, &db.clone())
             .expect("couldn't write user_db to file");
+        drop(db);
+        let env = self.env.lock().unwrap();
+        env.save(config_dir);
+        drop(env);
         log::info!("appstate saved");
     }
 }
