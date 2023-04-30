@@ -3,7 +3,7 @@ use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
 
 use crate::{
     google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
-    gphotos_api::{get_album_list, get_mediaitems, get_photo},
+    gphotos_api::{get_album_list, get_mediaitems, get_photo, MediaItem},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
     session_mgr::{SessionID, SESSION_MGR},
@@ -340,7 +340,7 @@ fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<Vali
         Ok(auth_guard) => {
             let mut context = Context::new();
             context.insert("profile", &auth_guard.user.photo);
-            if app_data.env.google_photos_album_id.is_empty() {
+            if app_data.env.google_photos_album_ids.is_empty() {
                 let mut response = Response::empty(tiny_http::StatusCode(302));
                 response.add_header(
                     tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/config")
@@ -395,7 +395,7 @@ fn handle_config(
         _ => {}
     };
     let mut context = Context::new();
-    if app_data.env.google_photos_album_id.is_empty() {
+    if app_data.env.google_photos_album_ids.is_empty() {
         context.insert("config", &true);
     }
     let mut credentials = auth_guard.user.credentials.clone();
@@ -421,8 +421,7 @@ fn handle_config(
             return Ok(());
         }
     };
-    // TODO: This will need updating when we support multiple albums
-    context.insert("selected_albums", &vec!(app_data.env.google_photos_album_id));
+    context.insert("selected_albums", &app_data.env.google_photos_album_ids);
     context.insert("album_list", &album_list);
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
@@ -462,7 +461,11 @@ fn handle_sync(
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let db_set = dbclient.get_mediaitems_set()?;
     CONNECTION_POOL.release_client(dbclient);
-    let gg_mediaitems = get_mediaitems(&access_token, &app_data.env.google_photos_album_id)?;
+    let mut gg_mediaitems: HashSet<MediaItem> = HashSet::new();
+    for album_id in app_data.env.google_photos_album_ids {
+        let album_mediaitems = get_mediaitems(&access_token, &album_id)?;
+        gg_mediaitems.extend(album_mediaitems);
+    };
     let gg_set: HashSet<_> = gg_mediaitems
         .iter()
         .map(|media_item| media_item.id.clone())
