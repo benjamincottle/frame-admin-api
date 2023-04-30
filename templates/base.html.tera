@@ -1,11 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
+{% block head %}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    {% block tel_css %}{% endblock %}
-    {% block tel_js %}{% endblock %}
-    <title>{% block title %} {% endblock %} - Frame Admin</title>
+    <title>{% block title %} {% endblock title %} - Frame Admin</title>
     <style>
       :root {
           --background-color: #1F2227;
@@ -68,14 +67,6 @@
         left: -19px;
         top: -4px;
       }
-       .fp_layout {
-        width: 100%;
-        padding-top: 64px;
-        margin: 0px;
-        display: flex;
-        flex-direction: row;
-        justify-content: center;
-      }      
       a,
       h1 {
         color: #777777;
@@ -94,20 +85,8 @@
       #l_dog_svg:hover {
         opacity: 0.76;
       }
-      #fp_dog_svg {
-        opacity: 0.1;
-        width: 440px;
-        height: 380px;
-      }
-      form input[type="text"],
-      form select {
-        display: block;
-        background: #25282D;
-        color: var(--text-color);
-        border: 1px solid var(--text-color);
-        margin-bottom: 10px;
-      }
     </style>
+{% endblock head %}
   </head>
   <body>
     <section class="header">

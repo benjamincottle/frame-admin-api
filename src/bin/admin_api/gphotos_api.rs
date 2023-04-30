@@ -80,9 +80,7 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
 pub struct PhotoAlbum {
     id: String,
     title: String,
-    productUrl: String,
     coverPhotoBaseUrl: String,
-    coverPhotoMediaItemId: String,
     mediaItemsCount: String
 }
 

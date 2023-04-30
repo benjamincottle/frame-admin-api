@@ -1,23 +1,82 @@
 {% extends 'base.html.tera' %}
 {% block title %}Config{% endblock %}
+{% block head %}
+    {{ super() }}
+    <style type="text/css">
+      .p_layout {
+        width: 100%;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      } 
+      fieldset {
+        cursor: pointer;
+        border: 3px solid #404245;
+        transition: opacity 0.3s ease-in-out;        
+      }
+      fieldset:hover {
+        border: 3px solid #eeFFee;
+      }    
+      .p_layout fieldset:not(.fieldset-selected) {
+        opacity: 0.76;
+      }
+      .p_layout fieldset:hover {
+        opacity: 1;
+      }
+      .p_layout fieldset:hover fieldset {
+        opacity: 1;
+      }
+      .fieldset-selected {
+        border: 3px solid #90FF90;
+        opacity: 1;
+      }
+      .fieldset-selected:hover {
+        border: 3px solid #90FF90;
+        opacity: 1;
+      }
+      .p_layout:hover fieldset:hover {
+        opacity: 1;
+      }
+    </style>
+{% endblock head %}
 {% block content %}
           <div>
-            <label for="google_photos_album_id">Google Photos Album ID:</label>
-            <input type="text" id="google_photos_album_id" name="google_photos_album_id">
-            <input type="button" value="Submit" onclick="submitForm()">
+            <button type="button" onclick="getAlbumList()">Get Albums</button>
           </div>
-          <div>
-            <p>{{ config | json_encode(pretty=true) | safe }}</p>
-            <p>{{ album_list | json_encode(pretty=true) | safe }}</p>            
+          <div id="album_list" class="p_layout">
           </div>
-{% endblock %}
+{% endblock content %}
 {% block scripts %}
 <script>
-function submitForm() {
-  const google_photos_album_id = document.getElementById("google_photos_album_id").value;
+function getAlbumList() {
+  const album_list = {{ album_list | json_encode(pretty=true) | safe }}
+  const selected_albums = {{ selected_albums | json_encode(pretty=true) | safe }}
+  const album_list_div = document.getElementById("album_list");
+  for (const album of album_list) {
+    if (album.title.length > 15) {
+      album.title = album.title.substring(0, 14) + "…";
+    }
+    let fieldset_class = "";
+    if (selected_albums.includes(album.id)) {
+      fieldset_class = "fieldset-selected";
+    }
+    html = `
+      <fieldset id="${album.id}" class="${fieldset_class}" onclick="this.classList.toggle('fieldset-selected'); toggle_selection(this.id);">
+        <legend>${album.title} (${album.mediaItemsCount})</legend>
+          <img src= ${album.coverPhotoBaseUrl}=w169-h169-c>
+      </fieldset>
+    `;
+    const album_div = document.createElement("div");
+    album_div.innerHTML = html;
+    album_list_div.appendChild(album_div);
+  }
+}
+
+function toggle_selection(fieldset) {
+  let album_id = fieldset;
   const xhr = new XMLHttpRequest();
   xhr.open("GET", "/frame_admin/config");
-  xhr.setRequestHeader("Google-Photos-Album-ID", google_photos_album_id);
+  xhr.setRequestHeader("Google-Photos-Album-ID", album_id);
   xhr.onload = function() {
     if (xhr.status === 200) {
       console.log(xhr.responseText);
@@ -28,4 +87,4 @@ function submitForm() {
   xhr.send();
 }
 </script>
-{% endblock %}
+{% endblock scripts %}

@@ -396,32 +396,34 @@ fn handle_config(
     };
     let mut context = Context::new();
     if app_data.env.google_photos_album_id.is_empty() {
-        let mut credentials = auth_guard.user.credentials.clone();
-        if SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards")
-            .as_secs()
-            > credentials.expires_in
-        {
-            log::info!("(handle_sync) token expired, should refresh");
-            credentials = refresh_token(&app_data, &auth_guard.user)?;
-        }
-        let access_token = credentials.access_token;
-        let album_list = match get_album_list(&access_token) {
-            Ok(album_list) => album_list,
-            Err(e) => {
-                log::error!("(handle_config) error getting album list, {}", e);
-                serve_error(
-                    request,
-                    tiny_http::StatusCode(500),
-                    "Internal server error: error getting album list",
-                );
-                return Ok(());
-            }
-        };
-        context.insert("config", &app_data.env);
-        context.insert("album_list", &album_list);
+        context.insert("config", &true);
     }
+    let mut credentials = auth_guard.user.credentials.clone();
+    if SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
+        > credentials.expires_in
+    {
+        log::info!("(handle_sync) token expired, should refresh");
+        credentials = refresh_token(&app_data, &auth_guard.user)?;
+    }
+    let access_token = credentials.access_token;
+    let album_list = match get_album_list(&access_token) {
+        Ok(album_list) => album_list,
+        Err(e) => {
+            log::error!("(handle_config) error getting album list, {}", e);
+            serve_error(
+                request,
+                tiny_http::StatusCode(500),
+                "Internal server error: error getting album list",
+            );
+            return Ok(());
+        }
+    };
+    // TODO: This will need updating when we support multiple albums
+    context.insert("selected_albums", &vec!(app_data.env.google_photos_album_id));
+    context.insert("album_list", &album_list);
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("config.html.tera", &context);
     let response = Response::from_data(rendered);

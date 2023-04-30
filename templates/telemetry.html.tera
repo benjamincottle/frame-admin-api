@@ -1,6 +1,7 @@
 {% extends 'base.html.tera' %}
 {% block title %}System Telemetry{% endblock %}
-{% block tel_css %}
+{% block head %}
+    {{ super() }}
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
     <style>
       .highcharts-color-0 {
@@ -92,13 +93,11 @@
         opacity: 0.6;
       }
     </style>    
-{% endblock %}
-{% block tel_js %}
     <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.3.3/highcharts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-{% endblock %}
+{% endblock head %}
 {% block content %}
         <div class="layout_toprow">
           <div>
@@ -129,7 +128,7 @@
               </tbody>
           </table>
         </div>
-{% endblock %}
+{% endblock content %}
 {% block scripts %}
     <script>
       $(document).ready(function () {
@@ -391,4 +390,4 @@
         });
       }
     </script>
-{% endblock %}
+{% endblock scripts %}

@@ -1,6 +1,26 @@
 {% extends 'base.html.tera' %}
 {% block title %}Sync Database{% endblock %}
+{% block head %}
+    {{ super() }}
+    <style type="text/css">
+    </style>
+{% endblock head %}
 {% block content %}
+  <div class="layout">
+    <table style="width: 400px;">
+      <thead>
+        <tr>
+          <th>Task Id</th>
+          <th>Action</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tasks">
+      </tbody>
+    </table>
+  </div>
+{% endblock content %}
+{% block scripts %}
 <script>
   function updateTasks() {
     fetch('/frame_admin/tasks', {
@@ -55,17 +75,4 @@
     updateTasks();
   };
 </script>
-  <div class="layout">
-    <table style="width: 400px;">
-      <thead>
-        <tr>
-          <th>Task Id</th>
-          <th>Action</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody id="tasks">
-      </tbody>
-    </table>
-  </div>
-{% endblock %}
+{% endblock scripts %}

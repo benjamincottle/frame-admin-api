@@ -1,11 +1,30 @@
 {% extends 'base.html.tera' %}
-{% block title %}Home{% endblock %}
+{% block title %}Home{% endblock title %}
+{% block head %}
+    {{ super() }}
+    <style type="text/css">
+      .p_layout {
+        width: 100%;
+        padding-top: 64px;
+        margin: 0px;
+        display: flex;
+        flex-direction: row;
+        justify-content: center;
+      }   
+      #p_dog_svg {
+        opacity: 0.1;
+        width: 440px;
+        height: 380px;
+      }
+    </style>
+{% endblock head %}
+
 {% block content %}
-          <div class="fp_layout">
-            <svg id="fp_dog_svg" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
+          <div class="p_layout">
+            <svg id="p_dog_svg" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
               <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill="#ffffff" stroke="none">
-              <use id="fp_dog_path" xlink:href="#l_dog_path"/>
+              <use id="p_dog_path" xlink:href="#l_dog_path"/>
             </svg>
             <p>Hello world! Take my picture ;)</p>
           </div>
-{% endblock %}
+{% endblock content %}
