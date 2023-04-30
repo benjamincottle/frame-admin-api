@@ -8,6 +8,8 @@
         display: flex;
         gap: 16px;
         flex-wrap: wrap;
+        justify-content: center;
+        padding-top: 16px;
       } 
       fieldset {
         cursor: pointer;
