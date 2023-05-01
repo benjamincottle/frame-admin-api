@@ -122,7 +122,7 @@
 {% endblock content %}
 {% block scripts %}
 <script>
-  const albumsPerPage = 4;
+  const albumsPerPage = 6;
   let currentPage = 1;
   const albumList = {{ album_list | json_encode(pretty = true) | safe }};
   const totalPages = Math.ceil(albumList.length / albumsPerPage);
@@ -160,7 +160,6 @@
       <a class="paginate_button previous ${currentPage === 1 ? 'disabled' : ''}" id="data_previous" onclick="goToPage(${currentPage - 1})"> &lt; </a>
       <span>
       `;
-    pager_div.innerHTML += `<a class="paginate_button" onclick="goToPage(1)">1</a>`
     if (totalPages <= 5) {
       // if there are 6 or fewer pages, show all pages
       for (let i = 1; i < totalPages; i++) {
@@ -172,6 +171,7 @@
       }
     } else {
       // if there are more than 6 pages, show abbreviated version
+      pager_div.innerHTML += `<a class="paginate_button" onclick="goToPage(1)">1</a>`
       let startPage = currentPage - 1;
       let endPage = currentPage + 1;
       if (startPage <= 2) {
