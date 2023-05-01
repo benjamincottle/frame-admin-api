@@ -5,18 +5,18 @@
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
     <style>
       .highcharts-color-0 {
-        fill: #0460ba;
-        stroke: #0460ba;
+        fill: var(--highcharts-color-0);
+        stroke: var(--highcharts-color-0);
       }
       .highcharts-color-1 {
-        fill: #9696ab;
-        stroke: #9696ab;
+        fill: var(--highcharts-color-1);
+        stroke: var(--highcharts-color-1);
       }      
       .highcharts-background {
-        fill: var(--background-color);
+        fill: var(--background-colour);
       }
       .highcharts-container text {
-        fill: var(--text-color);
+        fill: var(--text-colour);
       }
       .highcharts-subtitle,
       .highcharts-credits,
@@ -26,30 +26,30 @@
       .highcharts-tick, 
       .highcharts-axis-line, 
       .highcharts-grid-line {
-        stroke: var(--text-color);
+        stroke: var(--text-colour);
         stroke-opacity: 0.2;
       }
       .highcharts-tooltip-box {
-        fill: var(--text-color);
+        fill: var(--text-colour);
       }
       .highcharts-column-series rect.highcharts-point {
-        stroke: var(--background-color);
+        stroke: var(--background-colour);
       }
       table.dataTable tbody tr:nth-child(odd),
       table.dataTable.display tbody tr:nth-child(odd) {
-        background-color: var(--background-color);
+        background-color: var(--background-colour);
       }
       table.dataTable tbody tr:nth-child(even),
       table.dataTable.display tbody tr:nth-child(even) {
-        background-color: #25282D;
+        background-color: var(--dtables-row-even);
       }
       table.dataTable tbody tr:hover,
       table.dataTable.display tbody tr:hover {
-        background-color: #2B2E33;
+        background-color: var(--dtables-row-hover);
       }
       input,
         select {
-        color: #777777;
+        color: var(--input-colour);
       }
       .layout_toprow {
         padding-top: 15px;
@@ -82,8 +82,8 @@
       }
       span[title]:hover:before {
           content: attr(ctitle);
-          background-color: var(--background-color);
-          color: var(--text-color);
+          background-color: var(--background-colour);
+          color: var(--text-colour);
           position: absolute;
           transform: translateY(-1px);
           white-space: pre;
@@ -91,6 +91,14 @@
       canvas {
         transition: opacity 0.3s ease-in-out;
         opacity: 0.6;
+      }
+      .copy_notice {
+        background-color: var(--copy-notice-background-colour); 
+        color: var(--copy-notice-text-colour); 
+        padding: 5px; 
+        border-radius: 5px; 
+        font-size: 12px; 
+        z-index: 1000"
       }
     </style>    
     <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -220,7 +228,7 @@
           },
           title: {
             text: "Battery Voltage (mV)",
-            style: { color: "var(--text-color)", opacity: "0.5" },
+            style: { color: "var(--text-colour)", opacity: "0.5" },
           },
           legend: {
             enabled: false,
@@ -248,7 +256,7 @@
           series: [
             {
               name: "Battery Voltage",
-              color: "#5e81ac",
+              color: "var(--highcharts-series)",
               type: "spline",
               data: [],
             },
@@ -276,7 +284,7 @@
             : dataArray.push({
                 x: data["ts"] * 1000,
                 y: data["bat_voltage"],
-                color: "#bf616a",
+                color: "var(--highcharts-error-point)",
               });
         });
         dataArray.sort().reverse();
@@ -370,8 +378,9 @@
           var notice = document.createElement("div");
           var x = event.pageX - 20;
           var y = event.pageY - 50;
-          notice.style = "position: absolute; left: " + x + "px; top: " + y + "px; background-color: #d8dee9; color: #2e3440; padding: 5px; border-radius: 5px; font-size: 12px; z-index: 1000";
+          notice.style = "position: absolute; left: " + x + "px; top: " + y + "px;";
           notice.innerHTML = "Copied!";
+          notice.className = "copy_notice";
           document.body.appendChild(notice);
           setTimeout(function() { 
             $(notice).fadeOut(1250, function(){ notice.remove(); });

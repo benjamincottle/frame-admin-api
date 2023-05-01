@@ -1,89 +1,165 @@
 {% extends 'base.html.tera' %}
 {% block title %}Config{% endblock %}
 {% block head %}
-    {{ super() }}
-    <style type="text/css">
-      .p_layout {
-        width: 100%;
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-        justify-content: center;
-        padding-top: 16px;
-      } 
-      fieldset {
-        cursor: pointer;
-        border: 3px solid #404245;
-        transition: opacity 0.3s ease-in-out;        
-      }
-      fieldset:hover {
-        border: 3px solid #eeFFee;
-      }    
-      .p_layout fieldset:not(.fieldset-selected) {
-        opacity: 0.76;
-      }
-      .p_layout fieldset:hover {
-        opacity: 1;
-      }
-      .p_layout fieldset:hover fieldset {
-        opacity: 1;
-      }
-      .fieldset-selected {
-        border: 3px solid #90FF90;
-        opacity: 1;
-      }
-      .fieldset-selected:hover {
-        border: 3px solid #90FF90;
-        opacity: 1;
-      }
-      .p_layout:hover fieldset:hover {
-        opacity: 1;
-      }
-    </style>
+{{ super() }}
+<style type="text/css">
+  .p_layout {
+    width: 100%;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding-top: 16px;
+  }
+
+  fieldset {
+    cursor: pointer;
+    border: 3px solid var(--fieldset-border);
+    transition: opacity 0.3s ease-in-out;
+  }
+
+  fieldset:hover {
+    color: var(--fieldset-legend-hover);
+    border: 3px solid var(--fieldset-border-hover);
+  }
+
+  .p_layout fieldset:not(.fieldset-selected):not(.fieldset-display) {
+    opacity: 0.76;
+  }
+
+  .p_layout fieldset:hover {
+    opacity: 1;
+  }
+
+  .p_layout fieldset:hover fieldset {
+    opacity: 1;
+  }
+
+  .fieldset-selected {
+    color: var(--fieldset-legend-hover);
+    border: 3px solid var(--fieldset-border-selected);
+    opacity: 1;
+  }
+
+  .fieldset-selected:hover {
+    color: var(--fieldset-legend-hover);
+    border: 3px solid var(--fieldset-border-selected);
+    opacity: 1;
+  }
+
+  .p_layout:hover fieldset:hover {
+    opacity: 1;
+  }
+  
+  .fieldset-display, .fieldset-display:hover {
+    cursor: default;
+    border: 1px solid var(--fieldset-border-display);
+    opacity: 1;
+    color: var(--fieldset-legend-hover);
+    font-size: 0.8em;
+  }
+
+</style>
 {% endblock head %}
 {% block content %}
-          <div id="album_list" class="p_layout">
-          </div>
+<div id="selected_album_list" class="p_layout"></div>
+<div id="album_pager"></div>
+<div id="album_list" class="p_layout"></div>
 {% endblock content %}
 {% block scripts %}
 <script>
-window.onload = function () {
-  const album_list = {{ album_list | json_encode(pretty=true) | safe }}
-  const selected_albums = {{ selected_albums | json_encode(pretty=true) | safe }}
-  const album_list_div = document.getElementById("album_list");
-  for (const album of album_list) {
-    if (album.title.length > 15) {
-      album.title = album.title.substring(0, 14) + "…";
-    }
-    let fieldset_class = "";
-    if (selected_albums.includes(album.id)) {
-      fieldset_class = "fieldset-selected";
-    }
-    html = `
-      <fieldset id="${album.id}" class="${fieldset_class}" onclick="this.classList.toggle('fieldset-selected'); toggle_selection(this.id);">
-        <legend>${album.title} (${album.mediaItemsCount})</legend>
-          <img src= ${album.coverPhotoBaseUrl}=w169-h169-c>
-      </fieldset>
-    `;
-    const album_div = document.createElement("div");
-    album_div.innerHTML = html;
-    album_list_div.appendChild(album_div);
-  }
-};
-
-function toggle_selection(fieldset) {
-  let album_id = fieldset;
-  const xhr = new XMLHttpRequest();
-  xhr.open("GET", "/frame_admin/config");
-  xhr.setRequestHeader("Google-Photos-Album-ID", album_id);
-  xhr.onload = function() {
-    if (xhr.status === 200) {
-      console.log(xhr.responseText);
-    } else {
-      console.error(xhr.statusText);
-    }
+  const albumsPerPage = 20;
+  let currentPage = 1;
+  const albumList = {{ album_list | json_encode(pretty = true) | safe }};
+  let selectedAlbums = {{ selected_albums | json_encode(pretty = true) | safe }};
+  window.onload = function () {
+    renderAlbumList();
+    renderSelectedList();
   };
-  xhr.send();
-}
+
+  function renderAlbumList() {
+    const album_list_div = document.getElementById("album_list");
+    album_list_div.innerHTML = ""; // clear existing content
+    for (let i = (currentPage - 1) * albumsPerPage; i < Math.min(currentPage * albumsPerPage, albumList.length); i++) {
+      const album = albumList[i];
+      if (album.title.length > 15) {
+        album.title = album.title.substring(0, 14) + "…";
+      }
+      let fieldset_class = "";
+      if (selectedAlbums.includes(album.id)) {
+        fieldset_class = "fieldset-selected";
+      }
+      html = `
+          <fieldset id="${album.id}" class="${fieldset_class}" onclick="this.classList.toggle('fieldset-selected'); toggle_selection(this.id);">
+            <legend>${album.title} (${album.mediaItemsCount})</legend>
+              <img src= ${album.coverPhotoBaseUrl}=w169-h169-c>
+          </fieldset>
+        `;
+      const album_div = document.createElement("div");
+      album_div.innerHTML = html;
+      album_list_div.appendChild(album_div);
+    }
+    // add navigation controls
+    const pager_div = document.getElementById("album_pager");
+    pager_div.innerHTML = `
+      <button class="${currentPage === 1 ? 'disabled' : ''}" id="prev_button" onclick="prevPage()">Previous</button>
+      <span>Page ${currentPage} of ${Math.ceil(albumList.length / albumsPerPage)}</span>
+      <button class="${currentPage === Math.ceil(albumList.length / albumsPerPage) ? 'disabled' : ''}" id="next_button" onclick="nextPage()">Next</button>
+    `;
+  }
+
+  function renderSelectedList() {
+    const selected_album_list_div = document.getElementById("selected_album_list");
+    selected_album_list_div.innerHTML = ""; // clear existing content
+    for (album of albumList) {
+      if (album.title.length > 15) {
+        album.title = album.title.substring(0, 14) + "…";
+      }
+      html = `
+          <fieldset class="fieldset-display">
+            <legend>${album.title}</legend>
+              <img src= ${album.coverPhotoBaseUrl}=w89-h89-c>
+          </fieldset>
+        `;
+      if (selectedAlbums.includes(album.id)) {
+        const album_div = document.createElement("div");
+        album_div.innerHTML = html;
+        selected_album_list_div.appendChild(album_div);
+      }
+
+    }
+  }
+
+  function prevPage() {
+    if (currentPage > 1) {
+      currentPage--;
+      renderAlbumList();
+      renderSelectedList();
+    }
+  }
+
+  function nextPage() {
+    if (currentPage < Math.ceil(albumList.length / albumsPerPage)) {
+      currentPage++;
+      renderAlbumList();
+      renderSelectedList();
+    }
+  }
+
+  function toggle_selection(fieldset) {
+    let album_id = fieldset;
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "/frame_admin/config");
+    xhr.setRequestHeader("Google-Photos-Album-ID", album_id);
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        selectedAlbums = JSON.parse(xhr.responseText);
+        renderSelectedList();
+      } else {
+        console.error(xhr.statusText);
+      }
+    };
+    xhr.send();
+  }
 </script>
 {% endblock scripts %}
