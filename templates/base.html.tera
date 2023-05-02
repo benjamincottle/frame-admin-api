@@ -14,14 +14,14 @@
           --button-text: #121212;
           --nav-gradient: #1d2a39;
           --fieldset-border: #404245;
-          --fieldset-border-highlight: #ffa500;
+          --fieldset-border-highlight: #e7e7e7;
           --dtables-row-even: #25282D;
           --dtables-row-hover: #2B2E33;
           --input-colour: #777777;
           --highcharts-color-0: #0460ba;
           --highcharts-color-1: #9696ab;
-          --fp-dog-fill: #f4c325;
-          --nav-dog-fill: #ffa500;
+          --fp-dog-fill: #e7e7e7;
+          --nav-dog-fill: #e7e7e7;
           --highcharts-series: #5e81ac;
           --highcharts-error-point: #bf616a;
           --copy-notice-background-colour: #d8dee9;

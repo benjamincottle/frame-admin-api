@@ -59,6 +59,7 @@
   }
   #display_shelf {
     width: 100%;
+    min-height: 120px;
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -69,7 +70,7 @@
     margin-top: 16px;
     display: flex;
     flex-direction: row;
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
   .paginate_button {
     box-sizing: border-box;
@@ -125,12 +126,14 @@
   <legend>Selected Albums</legend>
   <div id="display_shelf"></div>
 </fieldset>
+
 <div id="pager"></div>
 <div id="album_list" class="p_layout"></div>
+
 {% endblock content %}
 {% block scripts %}
 <script>
-  const albumsPerPage = 5;
+  const albumsPerPage = 20;
   let currentPage = 1;
   const albumList = {{ album_list | json_encode(pretty = true) | safe }};
   const totalPages = Math.ceil(albumList.length / albumsPerPage);
@@ -165,7 +168,7 @@
     // add navigation controls
     const pager_div = document.getElementById("pager");
     pager_div.innerHTML = `
-      <a class="paginate_button previous ${currentPage === 1 ? 'disabled' : ''}" id="data_previous" onclick="goToPage(${currentPage - 1})"> &lt; </a>
+      <a class="paginate_button" style="pointer-events: none;">Available Albums</a> <a class="paginate_button previous ${currentPage === 1 ? 'disabled' : ''}" id="data_previous" onclick="goToPage(${currentPage - 1})"> &lt; </a>
       <span>
       `;
     if (totalPages < 6) {
@@ -213,24 +216,29 @@
 
   function renderSelectedList() {
     const display_shelf_div = document.getElementById("display_shelf");
-    display_shelf_div.innerHTML = "";
-    for (album of albumList) {
-      if (album.title.length > 15) {
-        album.title = album.title.substring(0, 14) + "…";
-      }
-      html = `
-          <fieldset class="fieldset-display-shelf-item">
-            <legend>${album.title}</legend>
-              <img src= ${album.coverPhotoBaseUrl}=w89-h89-c>
-          </fieldset>
-        `;
-      if (selectedAlbums.includes(album.id)) {
-        const album_div = document.createElement("div");
-        album_div.innerHTML = html;
-        display_shelf_div.appendChild(album_div);
-      }
+    if (selectedAlbums.length !== 0) {
+      display_shelf_div.innerHTML = "";
+      for (album of albumList) {
+        if (album.title.length > 15) {
+          album.title = album.title.substring(0, 14) + "…";
+        }
+        html = `
+            <fieldset class="fieldset-display-shelf-item">
+              <legend>${album.title}</legend>
+                <img src= ${album.coverPhotoBaseUrl}=w89-h89-c>
+            </fieldset>
+          `;
+        if (selectedAlbums.includes(album.id)) {
+          const album_div = document.createElement("div");
+          album_div.innerHTML = html;
+          display_shelf_div.appendChild(album_div);
+        }
 
+      }
+    } else {
+      display_shelf_div.innerHTML = "<span style='opacity: 0.76;'>Select an album to get started</span>";
     }
+     
   }
 
   function goToPage(page) {
