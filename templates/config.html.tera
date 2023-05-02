@@ -48,14 +48,14 @@
     border: 3px solid var(--fieldset-border);
     opacity: 1;
     color: var(--text-colour-highlight);
-    font-size: 1.3em;
+    font-size: 1.0em;
   }
   .fieldset-display-shelf-item, .fieldset-display-shelf-item:hover {
     cursor: default;
     border: 2px solid var(--fieldset-border);
     opacity: 1;
     color: var(--text-colour);
-    font-size: 0.6em;
+    font-size: 0.8em;
   }
   #display_shelf {
     width: 100%;
