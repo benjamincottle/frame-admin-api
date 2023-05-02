@@ -9,22 +9,19 @@
       :root {
           --background-colour: #1f2227;
           --text-colour: #c0c0c0;
+          --text-colour-highlight: #e7e7e7;
           --button-background: #909090;
           --button-text: #121212;
           --nav-gradient: #1d2a39;
           --fieldset-border: #404245;
-          --fieldset-border-hover: #8888ff;
-          --fieldset-border-selected: #ffff88;
-          --fieldset-border-display: #0070ff;
-          --fieldset-legend-hover: #f2f2f2;
-          --fieldset-legend-selected: #f2f2f2;
+          --fieldset-border-highlight: #ffa500;
           --dtables-row-even: #25282D;
           --dtables-row-hover: #2B2E33;
           --input-colour: #777777;
           --highcharts-color-0: #0460ba;
           --highcharts-color-1: #9696ab;
           --fp-dog-fill: #f4c325;
-          --nav-dog-fill: #0070ff;
+          --nav-dog-fill: #ffa500;
           --highcharts-series: #5e81ac;
           --highcharts-error-point: #bf616a;
           --copy-notice-background-colour: #d8dee9;
