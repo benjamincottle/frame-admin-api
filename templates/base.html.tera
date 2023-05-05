@@ -14,7 +14,7 @@
           --button-text: #121212;
           --nav-gradient: #1d2a39;
           --fieldset-border: #404245;
-          --fieldset-border-highlight: #e7e7e7;
+          --fieldset-border-highlight: #909090;
           --dtables-row-even: #25282D;
           --dtables-row-hover: #2B2E33;
           --input-colour: #777777;
@@ -27,23 +27,19 @@
           --copy-notice-background-colour: #d8dee9;
           --copy-notice-text-colour: #2e3440;
       }
-
       * {
           font-family: monospace;
       }
-
       body {
         margin: 0px;
         background-color: var(--background-colour);
         color: var(--text-colour);
       }
-
       .layout_column {
         padding: 10px;
         display: flex;
         flex-direction: column;
       }
-
       .header {
         width: 100%;
         padding-top: 15px;
@@ -56,7 +52,6 @@
         align-items: center;
         background: linear-gradient(to bottom, var(--nav-gradient), var(--background-colour));
       }
-
       .header_nav {
         width: 100%;
         padding: 10px;
@@ -66,7 +61,6 @@
         flex-direction: row;
         justify-content: space-between;
       }
-
       .profile_image {
         background-size: 32px 32px;
         display: block;
@@ -77,14 +71,12 @@
         height: 32px;
         border-radius: 50%;
         left: -15px;
-        opacity: 0.8;
+        opacity: 0.9;
         transition: opacity 0.3s ease-in-out;
       }
-
       .profile_image:hover {
         opacity: 1;
       }
-
       .profile_ring {
         position: absolute;
         width: 40px;
@@ -92,26 +84,22 @@
         left: -19px;
         top: -4px;
       }
-
       button {
         cursor: pointer;
         height: 26px;
         background-color: var(--button-background);
         color: var(--button-text);
       }
-
       button.disabled {
         opacity: 0.56;
         pointer-events: none;
       }
-      
       #l_dog_svg {
         opacity: 0.5;
         width: 44px;
         height: 38px;
         transition: opacity 0.3s ease-in-out;
       }
-      
       #l_dog_svg:hover {
         opacity: 0.76;
       }
@@ -170,7 +158,6 @@
         <div>
 {% if not config %}        
           <a href="{{ url_for(name='telemetry') }}"><button type="button">Telemetry</button></a>
-          <a href="{{ url_for(name='sync') }}"><button type="button">Sync</button></a>
 {% endif %}
           <a href="{{ url_for(name='config') }}"><button type="button">Config</button></a>
           <a href="{{ url_for(name='logout') }}"><button type="button">Logout</button></a>

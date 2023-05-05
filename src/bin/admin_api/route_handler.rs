@@ -59,6 +59,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
     router.add("/frame_admin/config", "config".to_string());
     router.add("/frame_admin/sync", "sync".to_string());
+    router.add("/frame_admin/sync_progress", "sync_progress".to_string());
     router.add("/frame_admin/telemetry", "telemetry".to_string());
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
     router.add("/frame_admin/tasks", "tasks".to_string());
@@ -101,6 +102,9 @@ pub fn route_request(app_data: AppState, request: Request) {
             if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
                 log::error!("(route_request) sync route failed: {}", err);
             };
+        }
+        "sync_progress" => {
+            handle_sync_progress(request, auth_guard);
         }
         "tasks" => {
             handle_tasks(request, auth_guard);
@@ -396,22 +400,24 @@ fn handle_config(
     {
         Some(album_id) => {
             let mut env = app_data.env.lock().unwrap();
-            if env.google_photos_album_ids.contains(&album_id.value.to_string()) {
-                env.google_photos_album_ids.retain(|id| id != &album_id.value);
+            if env
+                .google_photos_album_ids
+                .contains(&album_id.value.to_string())
+            {
+                env.google_photos_album_ids
+                    .retain(|id| id != &album_id.value);
             } else {
-                env.google_photos_album_ids.push(album_id.value.clone().to_string());
+                env.google_photos_album_ids
+                    .push(album_id.value.clone().to_string());
             }
             let google_photos_album_list = env.google_photos_album_ids.clone();
             drop(env);
             app_data.save("secrets/");
-
-            // TODO: replace with empty 200 response
             let album_list = ureq::serde_json::to_string(&google_photos_album_list).unwrap();
-            let response = Response::from_string(album_list)
-                .with_header(
-                    tiny_http::Header::from_str("Content-Type: application/json")
-                        .expect("This should never fail"),
-                );
+            let response = Response::from_string(album_list).with_header(
+                tiny_http::Header::from_str("Content-Type: application/json")
+                    .expect("This should never fail"),
+            );
             dispatch_response(request, response);
             return Ok(());
         }
@@ -510,11 +516,8 @@ fn handle_sync(
         .map(|s| s.to_string())
         .collect();
     TASK_BOARD.reset();
-    let mut context = Context::new();
     if new_set.len() == 0 && deleted_set.len() == 0 {
-        context.insert("profile", &auth_guard.user.photo);
-        let rendered = TEMPLATES.render("sync.html.tera", &context);
-        let response = Response::from_data(rendered);
+        let response = Response::empty(tiny_http::StatusCode(200));
         dispatch_response(request, response);
         return Ok(());
     }
@@ -604,9 +607,7 @@ fn handle_sync(
         });
     }
     log::info!("(handle_sync) {} sync thread(s) dispatched", threads);
-    context.insert("profile", &auth_guard.user.photo);
-    let rendered = TEMPLATES.render("sync.html.tera", &context);
-    let response = Response::from_data(rendered);
+    let response = Response::empty(tiny_http::StatusCode(202));
     dispatch_response(request, response);
     Ok(())
 }
@@ -621,6 +622,27 @@ fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
     };
     let body =
         ureq::serde_json::to_string(&TASK_BOARD.get_board()).expect("can't serialize task board");
+    let rendered = body.as_bytes();
+    let response = Response::empty(tiny_http::StatusCode(200))
+        .with_data(rendered, Some(rendered.len()))
+        .with_header(
+            tiny_http::Header::from_str("Content-Type: application/json")
+                .expect("This should never fail"),
+        );
+    dispatch_response(request, response);
+}
+
+// TODOL unwraps
+fn handle_sync_progress(request: Request, auth_guard: AuthGuard<ValidUser>) {
+    match auth_guard {
+        Ok(_) => {}
+        Err(_) => {
+            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            return;
+        }
+    };
+    let body = ureq::serde_json::to_string(&TASK_BOARD.board_status().unwrap())
+        .expect("can't serialize task board");
     let rendered = body.as_bytes();
     let response = Response::empty(tiny_http::StatusCode(200))
         .with_data(rendered, Some(rendered.len()))

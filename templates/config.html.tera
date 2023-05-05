@@ -12,6 +12,7 @@
     padding-top: 16px;
   }
   fieldset {
+    border-radius: 4px;
     cursor: pointer;
     color: var(--text-colour);
     border: 3px solid var(--fieldset-border);
@@ -21,27 +22,11 @@
     color: var(--text-colour-highlight);
     border: 3px solid var(--fieldset-border-highlight);
   }
-  .p_layout fieldset:not(.fieldset-selected):not(.fieldset-display-shelf-item) {
-    opacity: 0.76;
-  }
-  .p_layout fieldset:hover {
-    opacity: 1;
-  }
-  .p_layout fieldset:hover fieldset {
-    opacity: 1;
-  }
   .fieldset-selected {
-    color: var(--text-colour-highlight);
-    border: 3px solid var(--fieldset-border-highlight);
-    opacity: 1;
-  }
-  .fieldset-selected:hover {
-    color: var(--text-colour-highlight);
-    border: 3px solid var(--fieldset-border-highlight);
-    opacity: 1;
-  }
-  .p_layout:hover fieldset:hover {
-    opacity: 1;
+    pointer-events: none;
+    color: var(--text-colour);
+    border: 3px solid var(--fieldset-border);
+    opacity: 0.3;
   }
   .fieldset-display-shelf, .fieldset-display-shelf:hover {
     cursor: default;
@@ -50,12 +35,22 @@
     color: var(--text-colour-highlight);
     font-size: 1.0em;
   }
+  .fieldset-album:hover {
+    color: var(--text-colour-highlight);
+    border: 3px solid var(--fieldset-border-highlight);
+  }
   .fieldset-display-shelf-item, .fieldset-display-shelf-item:hover {
-    cursor: default;
-    border: 2px solid var(--fieldset-border);
+    pointer-events: all;
+    border: 2px solid var(--fieldset-border-highlight);
     opacity: 1;
-    color: var(--text-colour);
+    color: var(--text-colour-highlight);
     font-size: 0.8em;
+  }
+  .s_row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    margin-right: 42px;
   }
   #display_shelf {
     width: 100%;
@@ -65,6 +60,7 @@
     justify-content: center;
     align-items: center;
     padding-bottom: 5px;
+    gap: 12px;
   }  
   #pager {
     margin-top: 16px;
@@ -119,14 +115,98 @@
   .ellipsis {
     padding: 0 1em
   }
+  svg.p_ring {
+    pointer-events: none;
+    opacity: 0.76;
+    fill: none;
+    stroke-width: 2;
+    stroke: #2B2E33;
+  }
+  .y {
+    transition: all 1s ease-in-out;
+    stroke-dasharray: 39.825;
+    stroke-dashoffset: 39.825;
+    stroke: #F6AD01;
+  } 
+  .g {
+    transition: all 1s ease-in-out;
+    stroke-dasharray: 73.72;
+    stroke-dashoffset: 73.72;
+    stroke: #249A41;
+  }
+  .b {
+    transition: all 1s ease-in-out;
+    stroke-dasharray: 67.22;
+    stroke-dashoffset: 67.22;
+    stroke: #3174F1;
+  }
+  .r {
+    transition: all 1s ease-in-out;
+    stroke-dasharray: 74.05;
+    stroke-dashoffset: 74.05;
+    stroke: #E92D18;
+  }
+  .y_b, .g_b, .b_b, .r_b {
+    transition: all 1s ease-in-out;
+  }
+  .t {
+    stroke: none;
+    fill: #c0c0c0;
+    font-family: monospace;
+    font-size: 0.8em;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .sb {
+    cursor: pointer;
+    stroke: #909090;
+    fill: #909090;
+    stroke-width: 50;
+  }
+  .sb:hover {
+    stroke: #a0a0a0;
+    fill: #a0a0a0;
+  }
+  .ci {
+    fill: #2B2E33;
+  }
+  .sy {
+    stroke: none;
+    width: 1em;
+    height: 1em;
+    vertical-align: middle;
+    overflow: hidden;
+    stroke-width: 10;
+  }  
 </style>
 {% endblock head %}
 {% block content %}
-<fieldset class="fieldset-display-shelf">
-  <legend>Selected Albums</legend>
-  <div id="display_shelf"></div>
-</fieldset>
 
+<div>
+  <fieldset class="fieldset-display-shelf">
+    <legend>Selected Albums</legend>
+    <div class="s_row">
+      <div id="display_shelf"></div>
+      <div>
+        <svg id="p_ring" class="p_ring" height="100" focusable="false" version="1.1" viewBox="-2 -2 44 44" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+          <path id="y_b" class="y_b" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" /></path>
+          <path id="y" class="y" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" /></path>
+          <path id="g_b" class="g_b" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z" /></path>          
+          <path id="g" class="g" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z" /></path>
+          <path id="b_b" class="b_b" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z"/>   
+          <path id="b" class="b" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z" /></path>            
+          <path id="r_b" class="r_b" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z" /></path>          
+          <path id="r" class="r" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z" /></path>
+          <text id="t" class="t" x="46%" y="48%">100%</text>
+          <g id="sb" class="sb" transform="translate(11.76, 11.76) scale(0.016)" onclick="SyncSelected()">
+            <circle id="ci" class="ci" cx="514" cy="514" r="850" />
+            <path id="sy" class="sy" d="M505.6 57.6a20.906667 20.906667 0 0 1 6.4 15.36V170.666667a341.333333 341.333333 0 0 1 295.253333 512 22.186667 22.186667 0 0 1-15.786666 10.24 21.333333 21.333333 0 0 1-17.92-5.973334l-31.146667-31.146666a21.333333 21.333333 0 0 1-3.84-25.173334A253.44 253.44 0 0 0 768 512a256 256 0 0 0-256-256v100.693333a20.906667 20.906667 0 0 1-6.4 15.36l-8.533333 8.533334a21.333333 21.333333 0 0 1-30.293334 0L315.733333 229.973333a21.76 21.76 0 0 1 0-30.293333l151.04-150.613333a21.333333 21.333333 0 0 1 30.293334 0z m51.626667 585.813333a21.333333 21.333333 0 0 0-30.293334 0l-8.533333 8.533334a20.906667 20.906667 0 0 0-6.4 15.36V768a256 256 0 0 1-256-256 248.746667 248.746667 0 0 1 29.866667-119.04 21.76 21.76 0 0 0-3.84-25.173333l-31.573334-31.573334a21.333333 21.333333 0 0 0-17.92-5.973333 22.186667 22.186667 0 0 0-15.786666 11.093333A341.333333 341.333333 0 0 0 512 853.333333v97.706667a20.906667 20.906667 0 0 0 6.4 15.36l8.533333 8.533333a21.333333 21.333333 0 0 0 30.293334 0l151.04-150.613333a21.76 21.76 0 0 0 0-30.293333z" ></path>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </fieldset>
+</div>
 <div id="pager"></div>
 <div id="album_list" class="p_layout"></div>
 
@@ -156,23 +236,20 @@
         fieldset_class = "fieldset-selected";
       }
       html = `
-          <fieldset id="${album.id}" class="${fieldset_class}" onclick="this.classList.toggle('fieldset-selected'); toggle_selection(this.id);">
-            <legend>${album.title} (${album.mediaItemsCount})</legend>
-              <img src= ${album.coverPhotoBaseUrl}=w169-h169-c>
-          </fieldset>
+        <fieldset id="${album.id}" class="${album.id} ${fieldset_class}" onclick="this.classList.toggle('fieldset-selected'); toggle_selection(this.id);">
+           <legend>${album.title} (${album.mediaItemsCount})</legend>
+             <img src= ${album.coverPhotoBaseUrl}=w169-h169-c>
+         </fieldset>
         `;
       const album_div = document.createElement("div");
       album_div.innerHTML = html;
       album_list_div.appendChild(album_div);
     }
-    // add navigation controls
     const pager_div = document.getElementById("pager");
     pager_div.innerHTML = `
       <a class="paginate_button" style="pointer-events: none;">Available Albums</a> <a class="paginate_button previous ${currentPage === 1 ? 'disabled' : ''}" id="data_previous" onclick="goToPage(${currentPage - 1})"> &lt; </a>
-      <span>
       `;
-    if (totalPages < 6) {
-      // if there are 6 or fewer pages, show all pages
+    if (totalPages < 6) { // if there are 6 or fewer pages, show all pages
       for (let i = 1; i < totalPages; i++) {
         if (i === currentPage) {
           pager_div.innerHTML += `<a class="paginate_button current">${i}</a>`;
@@ -180,8 +257,7 @@
           pager_div.innerHTML += `<a class="paginate_button" onclick="goToPage(${i})">${i}</a>`;
         }
       }
-    } else {
-      // if there are more than 6 pages, show abbreviated version
+    } else { // if there are more than 6 pages, show abbreviated version
       pager_div.innerHTML += `<a class="paginate_button ${currentPage === 1 ? 'current"' : '" onclick="goToPage(1)"'}>1</a>`
       let startPage = currentPage - 1;
       let endPage = currentPage + 1;
@@ -209,23 +285,26 @@
     }
     pager_div.innerHTML += `
       <a class="paginate_button ${currentPage === totalPages ?  'current"' : `" onclick="goToPage(${totalPages})"`}>${totalPages}</a>
-    </span>
-    <a class="paginate_button next ${currentPage === totalPages ? 'disabled' : ''}" id="data_next" onclick="goToPage(${currentPage + 1})"> &gt; </a>
+      <a class="paginate_button next ${currentPage === totalPages ? 'disabled' : ''}" id="data_next" onclick="goToPage(${currentPage + 1})"> &gt; </a>
     `;
   }
 
   function renderSelectedList() {
     const display_shelf_div = document.getElementById("display_shelf");
     if (selectedAlbums.length !== 0) {
+      document.getElementById("sb").style.visibility = "visible";
+      document.getElementById('p_ring').style.opacity=0.76;
+      document.getElementById('p_ring').style.pointerEvents='all';
+      ProgressBar(0);
       display_shelf_div.innerHTML = "";
       for (album of albumList) {
         if (album.title.length > 15) {
           album.title = album.title.substring(0, 14) + "…";
         }
         html = `
-            <fieldset class="fieldset-display-shelf-item">
+            <fieldset id=${album.id} class="${album.id} fieldset-selected fieldset-display-shelf-item" onclick="const elements = document.getElementsByClassName('${album.id}'); for(let i = 0 ; i < elements.length; i++) { elements[i].classList.toggle('fieldset-selected');}; toggle_selection(this.id);">
               <legend>${album.title}</legend>
-                <img src= ${album.coverPhotoBaseUrl}=w89-h89-c>
+                <img src = ${album.coverPhotoBaseUrl}=w89-h89-c>
             </fieldset>
           `;
         if (selectedAlbums.includes(album.id)) {
@@ -233,12 +312,14 @@
           album_div.innerHTML = html;
           display_shelf_div.appendChild(album_div);
         }
-
       }
     } else {
+      document.getElementById("sb").style.visibility = "visible";
+      document.getElementById('p_ring').style.pointerEvents='none';
+      document.getElementById('p_ring').style.opacity=0.3;
+      ProgressBar(0);
       display_shelf_div.innerHTML = "<span style='opacity: 0.76;'>Select an album to get started</span>";
     }
-     
   }
 
   function goToPage(page) {
@@ -272,6 +353,81 @@
       if (xhr.status === 200) {
         selectedAlbums = JSON.parse(xhr.responseText);
         renderSelectedList();
+      } else {
+        console.error(xhr.statusText);
+      }
+    };
+    xhr.send();
+  }
+
+  function ProgressBar(percentage) {
+    const y = document.getElementById('y');
+    const g = document.getElementById('g');
+    const b = document.getElementById('b');
+    const r = document.getElementById('r');
+    const y_b = document.getElementById('y_b');
+    const g_b = document.getElementById('g_b');
+    const b_b = document.getElementById('b_b');
+    const r_b = document.getElementById('r_b');
+    const t = document.getElementById('t');
+    const y_len = y.getTotalLength();
+    const g_len = g.getTotalLength();
+    const b_len = b.getTotalLength();
+    const r_len = r.getTotalLength();
+    y.style.strokeDashoffset = y_len - (y_len * (percentage / 100));
+    g.style.strokeDashoffset = g_len - (g_len * (percentage / 100));
+    b.style.strokeDashoffset = b_len - (b_len * (percentage / 100));
+    r.style.strokeDashoffset = r_len - (r_len * (percentage / 100));
+    if (percentage === 100) {
+      y_b.style.stroke = "#F6AD01";
+      g_b.style.stroke = "#249A41";
+      b_b.style.stroke = "#3174F1";
+      r_b.style.stroke = "#E92D18";
+    } else {
+      y_b.style.stroke = "#2B2E33";
+      g_b.style.stroke = "#2B2E33";
+      b_b.style.stroke = "#2B2E33";
+      r_b.style.stroke = "#2B2E33";
+    };
+    t.innerHTML = percentage + '%';
+  }
+
+  function updateProgress() {
+    fetch('/frame_admin/sync_progress', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    })
+    .then(response => response.json())
+    .then(progress => {
+      if (progress.total_steps !== 0) {
+        const progressPercentage = Math.round((progress.current_step / progress.total_steps) * 100);
+        ProgressBar(progressPercentage);
+        if (progressPercentage < 100) {
+          setTimeout(function() {
+            updateProgress();
+          }, 500);
+        }
+      } else {
+        ProgressBar(100);
+      }
+    })
+    .catch(err => console.log(err));
+  };
+
+  function SyncSelected() {
+    document.getElementById('p_ring').style.pointerEvents='none';
+    document.getElementById('sb').style.visibility = "hidden";
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "/frame_admin/sync");
+    xhr.onload = function () {
+      if (xhr.status === 200) {
+        ProgressBar(100);
+      } else if (xhr.status === 202) {
+        updateProgress();
+      } else if (xhr.status === 302) {
+        window.location.href = xhr.getResponseHeader("Location");
       } else {
         console.error(xhr.statusText);
       }
