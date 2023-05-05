@@ -26,7 +26,7 @@
     pointer-events: none;
     color: var(--text-colour);
     border: 3px solid var(--fieldset-border);
-    opacity: 0.3;
+    opacity: 0.2;
   }
   .fieldset-display-shelf, .fieldset-display-shelf:hover {
     cursor: default;
