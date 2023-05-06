@@ -27,6 +27,8 @@ lazy_static! {
                 "/frame_admin/oauth/logout".to_string(),
             );
             urls.insert("config".to_string(), "/frame_admin/config".to_string());
+            urls.insert("docs".to_string(), "/frame_admin/docs".to_string());
+            urls.insert("profile".to_string(), "/frame_admin/profile".to_string());                        
             urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
             urls.insert(
                 "telemetry".to_string(),
