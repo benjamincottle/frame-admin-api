@@ -4,10 +4,18 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, io::Read};
 
 #[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
+pub struct MediaMetadata {
+    pub width: String,
+    pub height: String,
+}
+
+#[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
 pub struct MediaItem {
     pub id: String,
     pub productUrl: String,
     baseUrl: String,
+    mimeType: String,
+    mediaMetadata: MediaMetadata,
     filename: String,
 }
 
@@ -36,9 +44,13 @@ pub fn get_mediaitems(
                 .set("Content-Type", "Content-type: application/json")
                 .send_json(&body)?
                 .into_json()?;
-
         for media_item in response.result {
-            media_item_list.insert(media_item);
+            match media_item.mimeType.as_str() {
+                "image/jpeg" | "image/png" | "image/bmp" | "image/gif" => {
+                    media_item_list.insert(media_item);
+                },
+                _ => continue,
+            }
         }
         match response.nextPageToken.is_some() {
             true => page_token = response.nextPageToken.expect("This should never fail"),
