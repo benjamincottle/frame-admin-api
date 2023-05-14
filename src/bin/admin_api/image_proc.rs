@@ -44,16 +44,16 @@ pub fn encode_image(image: &DynamicImage) -> Vec<u8> {
         .enumerate()
         .map(|(i, &rgb)| (rgb, i as u8))
         .collect();
-    let mut data: Vec<u8> = Vec::new();
-    let mut buf: Vec<(u8, u8, u8)> = Vec::new();
+    let w = WIDTH as usize;
+    let h = HEIGHT as usize;
+    let mut data: Vec<u8> = Vec::with_capacity(w * h / 2);
+    let mut buf: Vec<(u8, u8, u8)> = Vec::with_capacity(2);
     let image_buf = image
         .resize_exact(WIDTH, HEIGHT, image::imageops::FilterType::Lanczos3)
         .to_rgb8();
     let pixels = image_buf.as_flat_samples().to_vec().samples;
     let mut i = 0;
     let mut j = 1;
-    let w = WIDTH as usize;
-    let h = HEIGHT as usize;
     let mut e: Vec<Vec<(f32, f32, f32)>> = vec![vec![(0.0, 0.0, 0.0); w]; 2];
     for y in 0..h {
         i = replace(&mut j, i);
@@ -68,7 +68,7 @@ pub fn encode_image(image: &DynamicImage) -> Vec<u8> {
                 let p1 = map[&buf[0]];
                 let p2 = map[&buf[1]];
                 data.push((p1 << 4) + p2);
-                buf = Vec::new();
+                buf = Vec::with_capacity(2);
             }
             let r = r - q_colour.0 as f32;
             let g = g - q_colour.1 as f32;
@@ -97,8 +97,10 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
         .enumerate()
         .map(|(i, &rgb)| (i as u8, rgb))
         .collect();
-    let mut pixels: Vec<u8> = Vec::new();
-    let mut buf: Vec<u8> = Vec::new();
+    let w = WIDTH as usize;
+    let h = HEIGHT as usize;
+    let mut pixels: Vec<u8> = Vec::with_capacity(3 * w * h / 2);
+    let mut buf: Vec<u8> = Vec::with_capacity(2);
     for byte in data {
         let p1 = byte >> 4;
         let p2 = byte & 0x0F;
@@ -113,7 +115,7 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
             pixels.push(p2.0);
             pixels.push(p2.1);
             pixels.push(p2.2);
-            buf = Vec::new();
+            buf = Vec::with_capacity(2);
         }
     }
     let image_buf = image::ImageBuffer::from_raw(WIDTH, HEIGHT, pixels);
@@ -127,4 +129,38 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
         }
     };
     Ok(dimage)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_nearest() {
+        assert_eq!(get_nearest((0.0, 0.0, 0.0)), PALETTE[0]); // Black
+        assert_eq!(get_nearest((255.0, 255.0, 255.0)), PALETTE[1]); // White
+        assert_eq!(get_nearest((0.0, 255.0, 0.0)), PALETTE[2]); // Green
+        assert_eq!(get_nearest((0.0, 0.0, 255.0)), PALETTE[3]); // Blue
+        assert_eq!(get_nearest((255.0, 0.0, 0.0)), PALETTE[4]); // Red
+        assert_eq!(get_nearest((255.0, 255.0, 0.0)), PALETTE[5]); // Yellow
+        assert_eq!(get_nearest((255.0, 128.0, 0.0)), PALETTE[6]); // Orange
+        assert_eq!(get_nearest((10.0, 10.0, 10.0)), PALETTE[0]); // Closest to Black
+        assert_eq!(get_nearest((245.0, 245.0, 245.0)), PALETTE[1]); // Closest to White
+        assert_eq!(get_nearest((10.0, 245.0, 10.0)), PALETTE[2]); // Closest to Green
+        assert_eq!(get_nearest((50.0, 100.0, 150.0)), PALETTE[3]); // Closest to Blue
+        assert_eq!(get_nearest((245.0, 10.0, 10.0)), PALETTE[4]); // Closest to Red
+        assert_eq!(get_nearest((245.0, 245.0, 10.0)), PALETTE[5]); // Closest to Yellow
+        assert_eq!(get_nearest((245.0, 118.0, 10.0)), PALETTE[6]); // Closest to Orange
+    }
+
+    #[test]
+    fn test_add() {
+        let c1 = (10.73, 23.87, 34.18);
+        let c2 = (40.22, 50.035, 60.701);
+        let result = add(c1, c2.0, c2.1, c2.2, 2.0);
+        assert_eq!(
+            (result.0, result.1, result.2),
+            (13.24375, 26.997189, 37.973812)
+        );
+    }
 }
