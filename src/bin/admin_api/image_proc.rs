@@ -61,7 +61,8 @@ pub fn encode_image(image: &DynamicImage) -> Vec<u8> {
     let mut data: Vec<u8> = Vec::with_capacity(w * h / 2);
     let mut buf: Vec<(u8, u8, u8)> = Vec::with_capacity(2);
     let image_buf = image
-        .resize_exact(nwidth, nheight, image::imageops::FilterType::Lanczos3)
+        // .resize_exact(nwidth, nheight, image::imageops::FilterType::Lanczos3)
+        .resize_to_fill(nwidth, nheight, image::imageops::FilterType::Lanczos3)
         .to_rgb8();
     let pixels = image_buf.as_flat_samples().to_vec().samples;
     let mut i = 0;
