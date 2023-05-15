@@ -1,8 +1,8 @@
 use image::DynamicImage;
 use std::{collections::HashMap, mem::replace};
 
-const WIDTH: u32 = 600;
-const HEIGHT: u32 = 448;
+const EPD_WIDTH: u32 = 600;
+const EPD_HEIGHT: u32 = 448;
 const PALETTE: [(u8, u8, u8); 7] = [
     (0, 0, 0),       // Black
     (255, 255, 255), // White
@@ -44,12 +44,24 @@ pub fn encode_image(image: &DynamicImage) -> Vec<u8> {
         .enumerate()
         .map(|(i, &rgb)| (rgb, i as u8))
         .collect();
-    let w = WIDTH as usize;
-    let h = HEIGHT as usize;
+    let (nwidth, nheight, w, h) = match image.width() > image.height() {
+        true => (
+            EPD_WIDTH,
+            EPD_HEIGHT,
+            EPD_WIDTH as usize,
+            EPD_HEIGHT as usize,
+        ),
+        false => (
+            (EPD_WIDTH / 2),
+            EPD_HEIGHT,
+            (EPD_WIDTH / 2) as usize,
+            EPD_HEIGHT as usize,
+        ),
+    };
     let mut data: Vec<u8> = Vec::with_capacity(w * h / 2);
     let mut buf: Vec<(u8, u8, u8)> = Vec::with_capacity(2);
     let image_buf = image
-        .resize_exact(WIDTH, HEIGHT, image::imageops::FilterType::Lanczos3)
+        .resize_exact(nwidth, nheight, image::imageops::FilterType::Lanczos3)
         .to_rgb8();
     let pixels = image_buf.as_flat_samples().to_vec().samples;
     let mut i = 0;
@@ -97,8 +109,20 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
         .enumerate()
         .map(|(i, &rgb)| (i as u8, rgb))
         .collect();
-    let w = WIDTH as usize;
-    let h = HEIGHT as usize;
+    let (nwidth, nheight, w, h) = match data.len() == (EPD_WIDTH * EPD_HEIGHT / 2) as usize {
+        true => (
+            EPD_WIDTH,
+            EPD_HEIGHT,
+            EPD_WIDTH as usize,
+            EPD_HEIGHT as usize,
+        ),
+        false => (
+            (EPD_WIDTH / 2),
+            EPD_HEIGHT,
+            (EPD_WIDTH / 2) as usize,
+            EPD_HEIGHT as usize,
+        ),
+    };
     let mut pixels: Vec<u8> = Vec::with_capacity(3 * w * h / 2);
     let mut buf: Vec<u8> = Vec::with_capacity(2);
     for byte in data {
@@ -118,7 +142,7 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
             buf = Vec::with_capacity(2);
         }
     }
-    let image_buf = image::ImageBuffer::from_raw(WIDTH, HEIGHT, pixels);
+    let image_buf = image::ImageBuffer::from_raw(nwidth, nheight, pixels);
     let dimage = match image_buf {
         Some(buf) => DynamicImage::ImageRgb8(buf),
         None => {

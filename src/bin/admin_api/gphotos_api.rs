@@ -15,7 +15,7 @@ pub struct MediaItem {
     pub productUrl: String,
     baseUrl: String,
     mimeType: String,
-    mediaMetadata: MediaMetadata,
+    pub mediaMetadata: MediaMetadata,
     filename: String,
 }
 
@@ -48,7 +48,7 @@ pub fn get_mediaitems(
             match media_item.mimeType.as_str() {
                 "image/jpeg" | "image/png" | "image/bmp" | "image/gif" => {
                     media_item_list.insert(media_item);
-                },
+                }
                 _ => continue,
             }
         }
@@ -61,7 +61,12 @@ pub fn get_mediaitems(
 }
 
 pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::error::Error>> {
-    let path = format!("{}=w600-h448-d", media_item.baseUrl);
+    let path = match media_item.mediaMetadata.width.parse::<i64>()?
+        > media_item.mediaMetadata.height.parse::<i64>()?
+    {
+        true => format!("{}=w600-h448-d", media_item.baseUrl),
+        false => format!("{}=w300-h448-d", media_item.baseUrl),
+    };
     let resp = ureq::get(&path).call()?;
     let dimage = match resp
         .header("Content-Length")
@@ -93,7 +98,7 @@ pub struct PhotoAlbum {
     id: String,
     title: String,
     coverPhotoBaseUrl: String,
-    mediaItemsCount: String
+    mediaItemsCount: String,
 }
 
 pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, ureq::Error> {
@@ -104,10 +109,7 @@ pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, ureq::Error
             ureq::get("https://photoslibrary.googleapis.com/v1/albums")
                 .set("Authorization", format!("Bearer {}", access_token).as_str())
                 .set("Content-Type", "Content-type: application/json")
-                .query_pairs(vec![
-                    ("pageToken", page_token.as_str()),
-                    ("pageSize", "50"),
-                ])
+                .query_pairs(vec![("pageToken", page_token.as_str()), ("pageSize", "50")])
                 .call()?
                 .into_json()?;
         for album in response.result {

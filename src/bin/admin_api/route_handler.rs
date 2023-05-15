@@ -568,19 +568,22 @@ fn handle_sync(
                 }
             };
             match task.data {
-                TaskData::MediaItem(task_data) => {
+                TaskData::MediaItem(media_item) => {
                     log::info!("(handle_sync) retrieving photo");
-                    match get_photo(&task_data)
+                    match get_photo(&media_item)
                         .and_then(|data| {
                             log::info!("(handle_sync) encoding image");
                             Ok(encode_image(&data))
                         })
                         .and_then(|data| {
                             log::info!("(handle_sync) adding media item to db");
+                            let portrait =
+                                media_item.mediaMetadata.width.parse::<i64>()? < media_item.mediaMetadata.height.parse::<i64>()?;
                             Ok(dbclient.add_record(AlbumRecord {
-                                item_id: task_data.id,
-                                product_url: task_data.productUrl,
+                                item_id: media_item.id,
+                                product_url: media_item.productUrl,
                                 ts: 0,
+                                portrait,
                                 data,
                             }))
                         }) {
@@ -591,9 +594,9 @@ fn handle_sync(
                         }
                     };
                 }
-                TaskData::String(task_data) => {
+                TaskData::String(item_id) => {
                     log::info!("(handle_sync) removing record from db");
-                    match dbclient.remove_record(task_data) {
+                    match dbclient.remove_record(item_id) {
                         Ok(_) => {}
                         Err(err) => {
                             log::error!("(handle_sync): {err}");
@@ -705,7 +708,7 @@ fn handle_telemetry_data(
         limit = records_total;
     }
     let records = transaction.query(
-        "SELECT ts, item_id, product_url, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr 
+        "SELECT ts, item_id, product_url, item_id_2, product_url_2, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr 
         FROM telemetry 
         ORDER BY ts DESC
         LIMIT $1 OFFSET $2", &[&limit, &offset])?;
@@ -717,14 +720,16 @@ fn handle_telemetry_data(
             ts: row.get(0),
             item_id: row.get(1),
             product_url: row.get(2),
-            chip_id: row.get(3),
-            uuid_number: row.get(4),
-            bat_voltage: row.get(5),
-            boot_code: row.get(6),
-            error_code: row.get(7),
-            return_code: row.get(8),
-            write_bytes: row.get(9),
-            remote_addr: row.get(10),
+            item_id_2: row.get(3),
+            product_url_2: row.get(4),
+            chip_id: row.get(5),
+            uuid_number: row.get(6),
+            bat_voltage: row.get(7),
+            boot_code: row.get(8),
+            error_code: row.get(9),
+            return_code: row.get(10),
+            write_bytes: row.get(11),
+            remote_addr: row.get(12),
         };
         event_log.push(record);
     }
