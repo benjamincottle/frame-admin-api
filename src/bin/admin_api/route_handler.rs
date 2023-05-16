@@ -687,7 +687,12 @@ fn handle_telemetry_data(
     match auth_guard {
         Ok(_) => {}
         Err(_) => {
-            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
             return Ok(());
         }
     };
@@ -763,7 +768,12 @@ fn handle_image(
     match auth_guard {
         Ok(_) => {}
         Err(_) => {
-            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
             return Ok(());
         }
     };

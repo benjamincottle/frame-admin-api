@@ -141,6 +141,14 @@
         const table = $("#data").DataTable({
           dom: "<'row'<l><i>>" + "<'row'<f><p>>" + "<'row'<tr>>",
           ajax: "/frame_admin/telemetry_data",
+          ajax: {
+            url: "/frame_admin/telemetry_data",
+            error: function(xhr, errorType, exception) {
+              if (xhr.status === 302) {
+                window.location.href = xhr.getResponseHeader("Location");
+              }
+            }
+          },          
           responsive: true,
           serverSide: true,
           order: [[1, "desc"]],
@@ -340,7 +348,6 @@
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
         let main_img = new Image();
-        let second_img = new Image();
         main_img.addEventListener("load", () => {
           canvas.width = main_img.width;
           canvas.height = main_img.height;
