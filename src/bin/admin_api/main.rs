@@ -98,34 +98,3 @@ fn main() {
         // thread::park();
     }
 }
-
-// COPY telemetry(ts, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr)
-// FROM '/var/lib/postgresql/data/db.csv'
-// DELIMITER '?'
-// CSV HEADER;
-
-// fn main2() {
-//     dotenv::from_path("secrets/.env").ok();
-//     env_logger::init();
-//     if env::var("POSTGRES_CONNECTION_STRING").is_err()
-//     {
-//         log::error!("environment not configured");
-//         return;
-//     }
-//     let database_url = &env::var("POSTGRES_CONNECTION_STRING").expect("previously validated");
-//     let pool_size = 4;
-//     CONNECTION_POOL.initialise(database_url, pool_size);
-//     let mut dbclient = CONNECTION_POOL.get_client().unwrap();
-
-//     let tel_rows = dbclient.0.query("SELECT * FROM telemetry", &[]).unwrap();
-//     for tel_row in tel_rows.iter() {
-//         let album_row = dbclient.0.query_one("SELECT item_id, product_url FROM album ORDER BY random() LIMIT 1", &[]).unwrap();
-//         let item_id: String = album_row.get(0);
-//         let product_url: String = album_row.get(1);
-//         let uuid_number: uuid::Uuid = tel_row.get(4);
-//         dbclient.0.execute("UPDATE telemetry SET item_id = $1, product_url = $2 WHERE uuid_number = $3",
-//                        &[&item_id, &product_url, &uuid_number]).unwrap();
-
-//     }
-//     CONNECTION_POOL.release_client(dbclient);
-// }
