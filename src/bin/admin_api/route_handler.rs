@@ -788,8 +788,13 @@ fn handle_image(
         }
     };
     CONNECTION_POOL.release_client(dbclient);
+    let (nwidth, nheight) = match data.len() {
+        134400 => (350, 261),
+        67200 => (175, 261),
+        _ => unreachable!(),
+    };
     let dynamic_image = decode_image(data)?;
-    let resized_dynamic_image = dynamic_image.resize_exact(350, 261, FilterType::Lanczos3);
+    let resized_dynamic_image = dynamic_image.resize_to_fill(nwidth, nheight, FilterType::Lanczos3);
     let mut buf = std::io::Cursor::new(Vec::new());
     resized_dynamic_image.write_to(&mut buf, image::ImageFormat::Jpeg)?;
     let mut response = Response::from_data(buf.into_inner());

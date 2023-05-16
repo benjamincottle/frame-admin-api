@@ -109,9 +109,7 @@
 {% block content %}
         <div class="layout_toprow">
           <div>
-            <a href ="#" id="link" target="_">
-              <canvas id="photo"></canvas>
-            </a>
+            <canvas id="photo"></canvas>
           </div>
           <div id="chart" class="grow"></div>
         </div>
@@ -338,16 +336,33 @@
         return str;
       }
 
-      function updatePhoto(src, href, code) {
-        const lnk = document.getElementById("link");
+      function updatePhoto(src, href, src2, href2, code) {
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
-        lnk.href = href;
         let main_img = new Image();
-        main_img.addEventListener("load", () => { 
+        let second_img = new Image();
+        main_img.addEventListener("load", () => {
           canvas.width = main_img.width;
           canvas.height = main_img.height;
-          ctx.drawImage(main_img, 0, 0) 
+          if (main_img.width == 175) {
+            canvas.width = main_img.width * 2;
+          };          
+          if ((main_img.width == 175) && (src2 == null)) {
+            ctx.fillStyle = "#FFFFFF";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(main_img, canvas.width / 4, 0)
+          } else {
+            ctx.drawImage(main_img, 0, 0)
+          };
+          if (src2 != null) {
+            let second_img = new Image();
+            second_img.addEventListener("load", () => { 
+              ctx.drawImage(second_img, canvas.width / 2, 0)
+              ctx.fillStyle = "#FFFFFF";
+              ctx.fillRect(canvas.width / 2, 2, 1, canvas.height);
+            }, false);
+            second_img.src = "image/" + src2;
+          }          
           let low_batt_img = new Image();
           if (code & 1 == 1) {
             low_batt_img.addEventListener("load", () => { 
@@ -361,10 +376,10 @@
 
       function setTableEvents(table) {
         table.on("init", () => {
-          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"], table.rows(0).data()[0]["error_code"]);
+          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"], table.rows(0).data()[0]["item_id_2"], table.rows(0).data()[0]["product_url_2"], table.rows(0).data()[0]["error_code"]);
         })
         .on('click', 'tr', function() {
-          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"], table.row(this).data()["error_code"]);
+          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"], table.row(this).data()["item_id_2"], table.row(this).data()["product_url_2"], table.row(this).data()["error_code"]);
         })
         .on('dblclick', 'td', function() {
           var cellData = table.cell(this).data();
