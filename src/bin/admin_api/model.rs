@@ -21,7 +21,7 @@ impl AppState {
         match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let db = ureq::serde_json::from_reader(reader).unwrap();
+                let db = ureq::serde_json::from_reader(reader).expect("couldn't deserialise db");
                 log::info!("appstate initialised");
                 AppState {
                     db: Arc::new(Mutex::new(db)),

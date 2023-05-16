@@ -19,7 +19,8 @@ impl Config {
         match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let config = ureq::serde_json::from_reader(reader).unwrap();
+                let config =
+                    ureq::serde_json::from_reader(reader).expect("couldn't deserialise config");
                 log::info!("config initialised");
                 config
             }

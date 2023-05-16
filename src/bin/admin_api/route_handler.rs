@@ -261,7 +261,10 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let code = code.expect("Code should be present");
     let token_response = request_token(&app_data, code.as_str());
     if token_response.is_err() {
-        let message = token_response.err().unwrap().to_string();
+        let message = token_response
+            .err()
+            .expect("token_response is err")
+            .to_string();
         log::error!("oauth2 error: {}", message);
         serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
         return;
@@ -285,7 +288,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         &claims,
         &EncodingKey::from_secret(jwt_secret.as_ref()),
     )
-    .unwrap();
+    .expect("can't encode token");
     let mut response = Response::empty(tiny_http::StatusCode(302));
     response.add_header(
         Header::from_str(&format!(
@@ -413,7 +416,8 @@ fn handle_config(
             let google_photos_album_list = env.google_photos_album_ids.clone();
             drop(env);
             app_data.save("secrets/");
-            let album_list = ureq::serde_json::to_string(&google_photos_album_list).unwrap();
+            let album_list = ureq::serde_json::to_string(&google_photos_album_list)
+                .expect("couldn't serialise album list");
             let response = Response::from_string(album_list).with_header(
                 tiny_http::Header::from_str("Content-Type: application/json")
                     .expect("This should never fail"),
@@ -577,8 +581,8 @@ fn handle_sync(
                         })
                         .and_then(|data| {
                             log::info!("(handle_sync) adding media item to db");
-                            let portrait =
-                                media_item.mediaMetadata.width.parse::<i64>()? < media_item.mediaMetadata.height.parse::<i64>()?;
+                            let portrait = media_item.mediaMetadata.width.parse::<i64>()?
+                                < media_item.mediaMetadata.height.parse::<i64>()?;
                             Ok(dbclient.add_record(AlbumRecord {
                                 item_id: media_item.id,
                                 product_url: media_item.productUrl,
