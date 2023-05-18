@@ -49,12 +49,13 @@ pub fn request_token(
             client_id, client_secret, authorization_code, redirect_url
         ));
     if response.is_ok() {
-        let oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
-
-        let parser = JWTParser::new(&client_id).unwrap();
+        let oauth_creds = response
+            .expect("response is ok")
+            .into_json::<OAuthCreds>()?;
+        let parser = JWTParser::new(&client_id).expect("couldn't create JWTParser");
         let claims = parser
-            .parse::<TokenClaims>(&oauth_creds.id_token.clone().unwrap())
-            .unwrap();
+            .parse::<TokenClaims>(&oauth_creds.id_token.clone().expect("id_token is some"))
+            .expect("couldn't parse jwt token");
         let google_user = get_google_user(&oauth_creds.access_token)?;
         let mut user_db = app_data.db.lock().unwrap();
         let email = google_user.email.to_lowercase();
@@ -133,7 +134,9 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
             client_id, client_secret, refresh_token
         ));
     if response.is_ok() {
-        let mut oauth_creds = response.unwrap().into_json::<OAuthCreds>()?;
+        let mut oauth_creds = response
+            .expect("response is ok")
+            .into_json::<OAuthCreds>()?;
         let expires_in = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -233,7 +236,7 @@ impl ValidUser {
             log::warn!("missing token, user not logged in");
             return Err(AuthError::MissingToken);
         }
-        let token = token.unwrap();
+        let token = token.expect("token is some");
         let env = app_data.env.lock().unwrap();
         let jwt_secret = env.jwt_secret.to_owned();
         drop(env);
@@ -306,7 +309,9 @@ impl JWTParser {
         let oidc_config_url = "https://accounts.google.com/.well-known/openid-configuration";
         let oidc_config_resp = ureq::get(oidc_config_url).call()?;
         let oidc_config: ureq::serde_json::Value = oidc_config_resp.into_json()?;
-        let jwks_uri = oidc_config["jwks_uri"].as_str().unwrap();
+        let jwks_uri = oidc_config["jwks_uri"]
+            .as_str()
+            .expect("can't get jwks_uri as str");
         Ok(Self {
             client_id: client_id.to_owned(),
             key_provider: Arc::new(Mutex::new(GooglePublicKeyProvider::new(jwks_uri))),

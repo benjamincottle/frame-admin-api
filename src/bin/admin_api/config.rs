@@ -19,7 +19,8 @@ impl Config {
         match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let config = ureq::serde_json::from_reader(reader).unwrap();
+                let config =
+                    ureq::serde_json::from_reader(reader).expect("couldn't deserialise config");
                 log::info!("config initialised");
                 config
             }
@@ -28,9 +29,12 @@ impl Config {
                 Config {
                     postgres_connection_string: env::var("POSTGRES_CONNECTION_STRING")
                         .expect("POSTGRES_CONNECTION_STRING not set"),
-                    google_photos_album_ids: vec!(),
+                    google_photos_album_ids: vec![],
                     jwt_secret: generate_secret(),
-                    jwt_max_age: 3600,
+                    jwt_max_age: env::var("TOKEN_MAXAGE")
+                        .expect("TOKEN_MAXAGE not set")
+                        .parse()
+                        .expect("TOKEN_MAXAGE not a number"),
                     google_oauth_client_id: env::var("GOOGLE_OAUTH_CLIENT_ID")
                         .expect("GOOGLE_OAUTH_CLIENT_ID not set"),
                     google_oauth_client_secret: env::var("GOOGLE_OAUTH_CLIENT_SECRET")

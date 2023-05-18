@@ -261,7 +261,10 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let code = code.expect("Code should be present");
     let token_response = request_token(&app_data, code.as_str());
     if token_response.is_err() {
-        let message = token_response.err().unwrap().to_string();
+        let message = token_response
+            .err()
+            .expect("token_response is err")
+            .to_string();
         log::error!("oauth2 error: {}", message);
         serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
         return;
@@ -285,7 +288,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         &claims,
         &EncodingKey::from_secret(jwt_secret.as_ref()),
     )
-    .unwrap();
+    .expect("can't encode token");
     let mut response = Response::empty(tiny_http::StatusCode(302));
     response.add_header(
         Header::from_str(&format!(
@@ -413,7 +416,8 @@ fn handle_config(
             let google_photos_album_list = env.google_photos_album_ids.clone();
             drop(env);
             app_data.save("secrets/");
-            let album_list = ureq::serde_json::to_string(&google_photos_album_list).unwrap();
+            let album_list = ureq::serde_json::to_string(&google_photos_album_list)
+                .expect("couldn't serialise album list");
             let response = Response::from_string(album_list).with_header(
                 tiny_http::Header::from_str("Content-Type: application/json")
                     .expect("This should never fail"),
@@ -568,19 +572,22 @@ fn handle_sync(
                 }
             };
             match task.data {
-                TaskData::MediaItem(task_data) => {
+                TaskData::MediaItem(media_item) => {
                     log::info!("(handle_sync) retrieving photo");
-                    match get_photo(&task_data)
+                    match get_photo(&media_item)
                         .and_then(|data| {
                             log::info!("(handle_sync) encoding image");
                             Ok(encode_image(&data))
                         })
                         .and_then(|data| {
                             log::info!("(handle_sync) adding media item to db");
+                            let portrait = media_item.mediaMetadata.width.parse::<i64>()?
+                                < media_item.mediaMetadata.height.parse::<i64>()?;
                             Ok(dbclient.add_record(AlbumRecord {
-                                item_id: task_data.id,
-                                product_url: task_data.productUrl,
+                                item_id: media_item.id,
+                                product_url: media_item.productUrl,
                                 ts: 0,
+                                portrait,
                                 data,
                             }))
                         }) {
@@ -591,9 +598,9 @@ fn handle_sync(
                         }
                     };
                 }
-                TaskData::String(task_data) => {
+                TaskData::String(item_id) => {
                     log::info!("(handle_sync) removing record from db");
-                    match dbclient.remove_record(task_data) {
+                    match dbclient.remove_record(item_id) {
                         Ok(_) => {}
                         Err(err) => {
                             log::error!("(handle_sync): {err}");
@@ -680,7 +687,12 @@ fn handle_telemetry_data(
     match auth_guard {
         Ok(_) => {}
         Err(_) => {
-            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
             return Ok(());
         }
     };
@@ -705,7 +717,7 @@ fn handle_telemetry_data(
         limit = records_total;
     }
     let records = transaction.query(
-        "SELECT ts, item_id, product_url, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr 
+        "SELECT ts, item_id, product_url, item_id_2, product_url_2, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr 
         FROM telemetry 
         ORDER BY ts DESC
         LIMIT $1 OFFSET $2", &[&limit, &offset])?;
@@ -717,14 +729,16 @@ fn handle_telemetry_data(
             ts: row.get(0),
             item_id: row.get(1),
             product_url: row.get(2),
-            chip_id: row.get(3),
-            uuid_number: row.get(4),
-            bat_voltage: row.get(5),
-            boot_code: row.get(6),
-            error_code: row.get(7),
-            return_code: row.get(8),
-            write_bytes: row.get(9),
-            remote_addr: row.get(10),
+            item_id_2: row.get(3),
+            product_url_2: row.get(4),
+            chip_id: row.get(5),
+            uuid_number: row.get(6),
+            bat_voltage: row.get(7),
+            boot_code: row.get(8),
+            error_code: row.get(9),
+            return_code: row.get(10),
+            write_bytes: row.get(11),
+            remote_addr: row.get(12),
         };
         event_log.push(record);
     }
@@ -754,7 +768,12 @@ fn handle_image(
     match auth_guard {
         Ok(_) => {}
         Err(_) => {
-            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
             return Ok(());
         }
     };
@@ -779,8 +798,13 @@ fn handle_image(
         }
     };
     CONNECTION_POOL.release_client(dbclient);
+    let (nwidth, nheight) = match data.len() {
+        134400 => (350, 261),
+        67200 => (175, 261),
+        _ => unreachable!(),
+    };
     let dynamic_image = decode_image(data)?;
-    let resized_dynamic_image = dynamic_image.resize_exact(350, 261, FilterType::Lanczos3);
+    let resized_dynamic_image = dynamic_image.resize_to_fill(nwidth, nheight, FilterType::Lanczos3);
     let mut buf = std::io::Cursor::new(Vec::new());
     resized_dynamic_image.write_to(&mut buf, image::ImageFormat::Jpeg)?;
     let mut response = Response::from_data(buf.into_inner());
