@@ -1,4 +1,5 @@
 mod config;
+mod database;
 mod google_oauth;
 mod gphotos_api;
 mod image_proc;
@@ -8,9 +9,8 @@ mod session_mgr;
 mod task_mgr;
 mod template_mgr;
 
-use frame::database::CONNECTION_POOL;
-
 use crate::{
+    database::CONNECTION_POOL,
     model::AppState,
     route_handler::{route_request, serve_error},
     session_mgr::SESSION_MGR,
