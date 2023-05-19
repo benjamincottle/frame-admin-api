@@ -158,7 +158,7 @@ fn handle_oauth_login(
             .iter()
             .find(|header| header.field.equiv("Referer"))
             .and_then(|h| Some(h.value.as_str()))
-            .or_else(|| Some("/frame_admin")) // TODO: this should be the default route
+            .or_else(|| Some("/frame_admin"))
             .expect("next_uri is now some");
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
@@ -179,6 +179,7 @@ fn handle_oauth_login(
         dispatch_response(request, response);
         return Ok(());
     }
+    // TODO: Fix this
     assert!(false, "I'm not sure that I should be able to get down here");
     let mut response = Response::empty(tiny_http::StatusCode(302));
     response.add_header(
@@ -665,7 +666,6 @@ fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
     dispatch_response(request, response);
 }
 
-// TODOL unwraps
 fn handle_sync_progress(request: Request, auth_guard: AuthGuard<ValidUser>) {
     match auth_guard {
         Ok(_) => {}
@@ -674,8 +674,9 @@ fn handle_sync_progress(request: Request, auth_guard: AuthGuard<ValidUser>) {
             return;
         }
     };
-    let body = ureq::serde_json::to_string(&TASK_BOARD.board_status().unwrap())
-        .expect("can't serialize task board");
+    let body =
+        ureq::serde_json::to_string(&TASK_BOARD.board_status().expect("can't get board status"))
+            .expect("can't serialize task board");
     let rendered = body.as_bytes();
     let response = Response::empty(tiny_http::StatusCode(200))
         .with_data(rendered, Some(rendered.len()))

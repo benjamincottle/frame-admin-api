@@ -34,25 +34,27 @@ impl TASK_BOARD {
         let task_board = self
             .lock()
             .map_err(|e| format!("Failed to acquire lock: {}", e))?;
-        let (pending_count, in_progress_count, completed_count, failed_count) =
-            task_board
-                .tasks
-                .values()
-                .fold((0, 0, 0, 0), |counts, task| match task.status {
-                    Status::Pending => (counts.0 + 1, counts.1, counts.2, counts.3),
-                    Status::InProgress => (counts.0, counts.1 + 1, counts.2, counts.3),
-                    Status::Completed => (counts.0, counts.1, counts.2 + 1, counts.3),
-                    Status::Failed => (counts.0, counts.1, counts.2, counts.3 + 1),
-                });
+        let (pending_count, in_progress_count, completed_count, failed_count) = task_board
+            .tasks
+            .values()
+            .fold((0, 0, 0, 0), |counts, task| match task.status {
+                Status::Pending => (counts.0 + 1, counts.1, counts.2, counts.3),
+                Status::InProgress => (counts.0, counts.1 + 1, counts.2, counts.3),
+                Status::Completed => (counts.0, counts.1, counts.2 + 1, counts.3),
+                Status::Failed => (counts.0, counts.1, counts.2, counts.3 + 1),
+            });
         let total_steps = task_board.tasks.len() * 3;
-        let current_step = pending_count
-            + 2 * in_progress_count
-            + 3 * (completed_count + failed_count);
+        let current_step =
+            pending_count + 2 * in_progress_count + 3 * (completed_count + failed_count);
         println!(
             "[Debug] Task Dashboard: total_steps: {}, current_step: {}, failed_count: {}",
             total_steps, current_step, failed_count
         );
-        Ok(TaskBoardStatus { total_steps, current_step, failed_count })
+        Ok(TaskBoardStatus {
+            total_steps,
+            current_step,
+            failed_count,
+        })
     }
 
     pub fn add_task(&self, action: Action) -> TaskId {
@@ -73,7 +75,7 @@ impl TASK_BOARD {
         let mut task_board = self.lock().unwrap();
         if let Some(task) = task_board.tasks.get_mut(&task_id) {
             task.status = status;
-        } // TODO: or handle error?
+        }
     }
 
     pub fn reset(&self) {
