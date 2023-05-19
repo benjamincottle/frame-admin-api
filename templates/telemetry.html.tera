@@ -347,6 +347,15 @@
       function updatePhoto(src, href, src2, href2, code) {
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
+        if ((src == null) && (src2 == null)) {
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.font = '20px monospace';
+          ctx.fillStyle = '#1f2227';
+          const text = "Image removed from album";
+          ctx.fillText(text, (canvas.width - ctx.measureText(text).width) / 2, canvas.height / 2);
+          return;
+        }
         let main_img = new Image();
         main_img.addEventListener("load", () => {
           canvas.width = main_img.width;
