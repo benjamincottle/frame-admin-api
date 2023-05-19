@@ -179,13 +179,8 @@ fn handle_oauth_login(
         dispatch_response(request, response);
         return Ok(());
     }
-    // TODO: Fix this
-    assert!(false, "I'm not sure that I should be able to get down here");
-    let mut response = Response::empty(tiny_http::StatusCode(302));
-    response.add_header(
-        Header::from_str("Location: /frame_admin/telemetry").expect("This should never fail"),
-    );
-    dispatch_response(request, response);
+    log::error!("(handle login) user logged out but session exists");
+    serve_error(request, tiny_http::StatusCode(500), "Internal server error");
     Ok(())
 }
 
