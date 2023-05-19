@@ -1,5 +1,7 @@
 use chrono::{Duration, Utc};
-use frame::database::{AlbumRecord, TelemetryRecord, CONNECTION_POOL};
+use frame::database::CONNECTION_POOL;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::{
     google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
@@ -29,6 +31,23 @@ use std::{
 use tera::Context;
 use tiny_http::{Header, Request, Response};
 use url::Url;
+
+#[derive(Debug, Serialize, Deserialize)]
+struct TelemetryRecord {
+    ts: i64,
+    item_id: Option<String>,
+    product_url: Option<String>,
+    item_id_2: Option<String>,
+    product_url_2: Option<String>,
+    chip_id: i32,
+    uuid_number: Uuid,
+    bat_voltage: i32,
+    boot_code: i32,
+    error_code: i32,
+    return_code: Option<i32>,
+    write_bytes: Option<i32>,
+    remote_addr: Vec<IpAddr>,
+}
 
 pub fn route_request(app_data: AppState, request: Request) {
     let url = match Url::parse("http://localhost:5000")
@@ -495,7 +514,11 @@ fn handle_sync(
     }
     let access_token = credentials.access_token;
     let mut dbclient = CONNECTION_POOL.get_client()?;
-    let db_set = dbclient.get_mediaitems_set()?;
+    let mut db_set = HashSet::new();
+    for row in dbclient.query("SELECT item_id FROM album", &[])? {
+        let media_item_id: &str = row.get(0);
+        db_set.insert(media_item_id.to_string());
+    }
     CONNECTION_POOL.release_client(dbclient);
     let mut gg_mediaitems: HashSet<MediaItem> = HashSet::new();
     let env = app_data.env.lock().unwrap();
@@ -583,13 +606,16 @@ fn handle_sync(
                             log::info!("(handle_sync) adding media item to db");
                             let portrait = media_item.mediaMetadata.width.parse::<i64>()?
                                 < media_item.mediaMetadata.height.parse::<i64>()?;
-                            Ok(dbclient.add_record(AlbumRecord {
-                                item_id: media_item.id,
-                                product_url: media_item.productUrl,
-                                ts: 0,
-                                portrait,
-                                data,
-                            }))
+                            Ok(dbclient.execute(
+                                "INSERT INTO album (item_id, product_url, ts, portrait, data) VALUES ($1, $2, $3, $4, $5)",
+                                &[
+                                    &media_item.id,
+                                    &media_item.productUrl,
+                                    &(0 as i64),
+                                    &portrait,
+                                    &data,
+                                ],
+                            ))
                         }) {
                         Ok(_) => {}
                         Err(err) => {
@@ -600,7 +626,7 @@ fn handle_sync(
                 }
                 TaskData::String(item_id) => {
                     log::info!("(handle_sync) removing record from db");
-                    match dbclient.remove_record(item_id) {
+                    match dbclient.execute("DELETE FROM album WHERE item_id = $1", &[&item_id]) {
                         Ok(_) => {}
                         Err(err) => {
                             log::error!("(handle_sync): {err}");
@@ -710,7 +736,7 @@ fn handle_telemetry_data(
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(0);
     let mut dbclient = CONNECTION_POOL.get_client()?;
-    let mut transaction = dbclient.0.transaction()?;
+    let mut transaction = dbclient.transaction()?;
     let count_row = transaction.query_one("SELECT COUNT(*) FROM telemetry", &[])?;
     let records_total: i64 = count_row.get(0);
     if limit == -1 {
@@ -786,7 +812,6 @@ fn handle_image(
     };
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let data: Vec<u8> = match dbclient
-        .0
         .query("SELECT data FROM album WHERE item_id = $1", &[&image_id])?
         .get(0)
         .and_then(|row| row.get(0))
