@@ -30,7 +30,6 @@ pub struct GoogleUserResult {
     pub given_name: String,
     pub family_name: String,
     pub picture: String,
-    pub locale: String,
 }
 
 pub fn request_token(
@@ -67,11 +66,9 @@ pub fn request_token(
             .as_secs()
             + oauth_creds.expires_in;
         let user_id: String;
-
-        if user.is_some() {
-            let user = user.expect("user is some");
+        if let Some(user) = user {
             user_id = user.id.clone();
-            user.email = email.to_owned();
+            email.clone_into(&mut user.email);
             user.photo = google_user.picture;
             user.updatedAt = current_datetime;
             let refresh_token = match oauth_creds.refresh_token.clone() {
@@ -83,7 +80,7 @@ pub fn request_token(
                 expires_in,
                 id_token: oauth_creds.id_token.clone(),
                 scope: oauth_creds.scope.clone(),
-                token_type: oauth_creds.token_type.clone(),
+                token_type: oauth_creds.token_type,
                 refresh_token,
             };
         } else {
@@ -99,14 +96,14 @@ pub fn request_token(
                     id_token: oauth_creds.id_token.clone(),
                     scope: oauth_creds.scope.clone(),
                     token_type: oauth_creds.token_type.clone(),
-                    refresh_token: oauth_creds.refresh_token.clone(),
+                    refresh_token: oauth_creds.refresh_token,
                 },
                 photo: google_user.picture,
                 createdAt: current_datetime,
                 updatedAt: current_datetime,
             };
-            user_db.push(user_data.to_owned());
-        }
+            user_db.push(user_data);
+        };
         drop(user_db);
         app_data.save("secrets/");
 
@@ -148,10 +145,19 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
             .iter_mut()
             .find(|user_to_update| user_to_update.id == user.id)
             .expect("auth_guard was Ok");
-        user_to_update.credentials.access_token = oauth_creds.access_token.clone();
+        user_to_update
+            .credentials
+            .access_token
+            .clone_from(&oauth_creds.access_token);
         user_to_update.credentials.expires_in = oauth_creds.expires_in;
-        user_to_update.credentials.scope = oauth_creds.scope.clone();
-        user_to_update.credentials.token_type = oauth_creds.token_type.clone();
+        user_to_update
+            .credentials
+            .scope
+            .clone_from(&oauth_creds.scope);
+        user_to_update
+            .credentials
+            .token_type
+            .clone_from(&oauth_creds.token_type);
         user_to_update.updatedAt = Utc::now();
         drop(user_db);
         app_data.save("secrets/");
@@ -162,7 +168,7 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
     }
 }
 
-pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), ureq::Error> {
+pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<ureq::Error>> {
     ureq::post("https://oauth2.googleapis.com/revoke")
         .set("Content-Type", "application/x-www-form-urlencoded")
         .send_string(&format!("token={}", user.credentials.access_token))?;
@@ -220,18 +226,16 @@ impl ValidUser {
                     .as_str()
                     .split(';')
                     .find(|cookie| cookie.trim().starts_with("token="))
-                    .and_then(|c| Some(c.trim().trim_start_matches("token=")))
+                    .map(|c| c.trim().trim_start_matches("token="))
             })
             .or_else(|| {
                 request
                     .headers()
                     .iter()
                     .find(|header| header.field.equiv("Authorization"))
-                    .and_then(|c| {
-                        let t = c.value.as_str().trim_start_matches("Bearer ");
-                        Some(t)
-                    })
+                    .map(|c| c.value.as_str().trim_start_matches("Bearer "))
             });
+
         if token.is_none() {
             log::warn!("missing token, user not logged in");
             return Err(AuthError::MissingToken);
@@ -249,9 +253,7 @@ impl ValidUser {
         match decode {
             Ok(token) => {
                 let user_db = app_data.db.lock().unwrap();
-                let user = user_db
-                    .iter()
-                    .find(|user| user.id == token.claims.sub.to_owned());
+                let user = user_db.iter().find(|user| user.id == token.claims.sub);
                 if user.is_none() {
                     log::warn!("user belonging to this token no longer exists");
                     return Err(AuthError::InvalidToken);
@@ -263,7 +265,7 @@ impl ValidUser {
             }
             Err(_) => {
                 log::warn!("invalid token or user doesn't exist");
-                return Err(AuthError::InvalidToken);
+                Err(AuthError::InvalidToken)
             }
         }
     }
@@ -371,9 +373,9 @@ impl GooglePublicKeyProvider {
         match ureq::get(&self.url).call() {
             Ok(r) => {
                 let expiration_time = r.header("cache-control").and_then(|v| {
-                    v.split(",")
+                    v.split(',')
                         .find(|s| s.contains("max-age"))
-                        .and_then(|s| s.split("=").nth(1))
+                        .and_then(|s| s.split('=').nth(1))
                         .and_then(|s| s.parse::<u64>().ok())
                         .map(|s| Instant::now() + std::time::Duration::from_secs(s))
                 });
@@ -405,7 +407,7 @@ impl GooglePublicKeyProvider {
         if self.expiration_time.is_none() || self.is_expire() {
             self.reload()?
         }
-        match self.keys.get(&kid.to_owned()) {
+        match self.keys.get(kid) {
             None => Result::Err(GoogleKeyProviderError::KeyNotFound(
                 "couldn't match kid".to_string(),
             )),

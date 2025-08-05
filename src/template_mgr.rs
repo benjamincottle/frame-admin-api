@@ -40,7 +40,7 @@ lazy_static! {
             );
             urls
         };
-        tera.register_function("url_for", make_url_for(urls.clone()));
+        tera.register_function("url_for", make_url_for(urls));
         log::info!("setup template functions complete");
         Mutex::new(tera)
     };

@@ -1,6 +1,5 @@
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use crate::{
     database::CONNECTION_POOL,
@@ -15,7 +14,6 @@ use crate::{
 
 use image::imageops::FilterType;
 use jsonwebtoken::{encode, EncodingKey, Header as JWTHeader};
-use log;
 use route_recognizer::{Params, Router};
 use std::{
     cmp::min,
@@ -39,20 +37,15 @@ struct TelemetryRecord {
     product_url: Option<String>,
     item_id_2: Option<String>,
     product_url_2: Option<String>,
-    chip_id: i32,
-    uuid_number: Uuid,
     bat_voltage: i32,
     boot_code: i32,
-    error_code: i32,
-    return_code: Option<i32>,
-    write_bytes: Option<i32>,
     remote_addr: Vec<IpAddr>,
 }
 
 pub fn route_request(app_data: AppState, request: Request) {
     let url = match Url::parse("http://localhost:5000")
         .expect("This should never fail")
-        .join(&request.url())
+        .join(request.url())
     {
         Ok(url) => url,
         Err(e) => {
@@ -65,7 +58,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             return;
         }
     };
-    let url = url.path().trim_end_matches("/");
+    let url = url.path().trim_end_matches('/');
     let mut router = Router::new();
     router.add("/frame_admin", "index".to_string());
     router.add("/frame_admin/oauth/login", "oauth_login".to_string());
@@ -142,7 +135,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             };
         }
         _ => {
-            assert!(false, "unreachable");
+            unreachable!("unreachable");
         }
     }
 }
@@ -157,8 +150,8 @@ fn handle_oauth_login(
             .headers()
             .iter()
             .find(|header| header.field.equiv("Referer"))
-            .and_then(|h| Some(h.value.as_str()))
-            .or_else(|| Some("/frame_admin"))
+            .map(|h| h.value.as_str())
+            .or(Some("/frame_admin"))
             .expect("next_uri is now some");
         let session_id: SessionID = SESSION_MGR.create_session();
         SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
@@ -186,24 +179,21 @@ fn handle_oauth_login(
 
 fn handle_oauth_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let mut response = Response::empty(tiny_http::StatusCode(302));
-    match auth_guard {
-        Ok(_) => {
-            response.add_header(
-                Header::from_str(&format!(
-                    "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-                    Duration::seconds(-1)
-                ))
-                .expect("This should never fail"),
-            );
-            response.add_header(
-                Header::from_str(&format!(
-                    "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
-                    Duration::seconds(-1)
-                ))
-                .expect("This should never fail"),
-            );
-        }
-        Err(_) => {}
+    if auth_guard.is_ok() {
+        response.add_header(
+            Header::from_str(&format!(
+                "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
+                Duration::seconds(-1)
+            ))
+            .expect("This should never fail"),
+        );
+        response.add_header(
+            Header::from_str(&format!(
+                "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
+                Duration::seconds(-1)
+            ))
+            .expect("This should never fail"),
+        );
     };
     response
         .add_header(Header::from_str("Location: /frame_admin").expect("This should never fail"));
@@ -228,8 +218,8 @@ fn handle_oauth_authorise(app_data: AppState, request: Request) {
     let mut url =
         Url::parse("https://accounts.google.com/o/oauth2/v2/auth").expect("This should never fail");
     url.query_pairs_mut()
-        .append_pair("client_id", &google_oauth_client_id)
-        .append_pair("redirect_uri", &google_oauth_redirect_url)
+        .append_pair("client_id", google_oauth_client_id)
+        .append_pair("redirect_uri", google_oauth_redirect_url)
         .append_pair("response_type", "code")
         .append_pair(
             "scope",
@@ -277,8 +267,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let token_response = request_token(&app_data, code.as_str());
     if token_response.is_err() {
         let message = token_response
-            .err()
-            .expect("token_response is err")
+            .expect_err("token_response is err")
             .to_string();
         log::error!("oauth2 error: {}", message);
         serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
@@ -290,7 +279,6 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     let jwt_secret = env.jwt_secret.to_owned();
     let jwt_max_age = env.jwt_max_age;
     drop(env);
-    let jwt_secret = jwt_secret;
     let iat = current_datetime.timestamp() as usize;
     let exp = (current_datetime + Duration::seconds(jwt_max_age)).timestamp() as usize;
     let claims: TokenClaims = TokenClaims {
@@ -411,36 +399,33 @@ fn handle_config(
             return Ok(());
         }
     };
-    match request
+    if let Some(album_id) = request
         .headers()
         .iter()
-        .find(|header| header.field.as_str() == "Google-Photos-Album-ID")
+        .find(|header| header.field.equiv("Google-Photos-Album-ID"))
     {
-        Some(album_id) => {
-            let mut env = app_data.env.lock().unwrap();
-            if env
-                .google_photos_album_ids
-                .contains(&album_id.value.to_string())
-            {
-                env.google_photos_album_ids
-                    .retain(|id| id != &album_id.value);
-            } else {
-                env.google_photos_album_ids
-                    .push(album_id.value.clone().to_string());
-            }
-            let google_photos_album_list = env.google_photos_album_ids.clone();
-            drop(env);
-            app_data.save("secrets/");
-            let album_list = ureq::serde_json::to_string(&google_photos_album_list)
-                .expect("couldn't serialise album list");
-            let response = Response::from_string(album_list).with_header(
-                tiny_http::Header::from_str("Content-Type: application/json")
-                    .expect("This should never fail"),
-            );
-            dispatch_response(request, response);
-            return Ok(());
+        let mut env = app_data.env.lock().unwrap();
+        if env
+            .google_photos_album_ids
+            .contains(&album_id.value.to_string())
+        {
+            env.google_photos_album_ids
+                .retain(|id| id != &album_id.value);
+        } else {
+            env.google_photos_album_ids
+                .push(album_id.value.clone().to_string());
         }
-        _ => {}
+        let google_photos_album_list = env.google_photos_album_ids.clone();
+        drop(env);
+        app_data.save("secrets/");
+        let album_list = ureq::serde_json::to_string(&google_photos_album_list)
+            .expect("couldn't serialise album list");
+        let response = Response::from_string(album_list).with_header(
+            tiny_http::Header::from_str("Content-Type: application/json")
+                .expect("This should never fail"),
+        );
+        dispatch_response(request, response);
+        return Ok(());
     };
     let env = app_data.env.lock().unwrap();
     let google_photos_album_ids = env.google_photos_album_ids.clone();
@@ -528,24 +513,16 @@ fn handle_sync(
         .iter()
         .map(|media_item| media_item.id.clone())
         .collect();
-    let new_set: HashSet<_> = gg_set
-        .difference(&db_set)
-        .cloned()
-        .map(|s| s.to_string())
-        .collect();
-    let deleted_set: HashSet<_> = db_set
-        .difference(&gg_set)
-        .cloned()
-        .map(|s| s.to_string())
-        .collect();
+    let new_set: HashSet<_> = gg_set.difference(&db_set).cloned().collect();
+    let deleted_set: HashSet<_> = db_set.difference(&gg_set).cloned().collect();
     TASK_BOARD.reset();
-    if new_set.len() == 0 && deleted_set.len() == 0 {
+    if new_set.is_empty() && deleted_set.is_empty() {
         let response = Response::empty(tiny_http::StatusCode(200));
         dispatch_response(request, response);
         return Ok(());
     }
     let queue = Arc::new(TaskQueue::new());
-    if new_set.len() > 0 {
+    if !new_set.is_empty() {
         log::info!("(handle_sync) found {} new media items", new_set.len());
         for media_item in gg_mediaitems.iter() {
             if new_set.contains(&media_item.id) {
@@ -558,7 +535,7 @@ fn handle_sync(
             }
         }
     }
-    if deleted_set.len() > 0 {
+    if !deleted_set.is_empty() {
         log::info!(
             "(handle_sync) found {} deleted media items",
             deleted_set.len()
@@ -594,9 +571,9 @@ fn handle_sync(
                 TaskData::MediaItem(media_item) => {
                     log::info!("(handle_sync) retrieving photo");
                     match get_photo(&media_item)
-                        .and_then(|data| {
+                        .map(|data| {
                             log::info!("(handle_sync) encoding image");
-                            Ok(encode_image(&data))
+                            encode_image(&data)
                         })
                         .and_then(|data| {
                             log::info!("(handle_sync) adding media item to db");
@@ -607,7 +584,7 @@ fn handle_sync(
                                 &[
                                     &media_item.id,
                                     &media_item.productUrl,
-                                    &(0 as i64),
+                                    &0_i64,
                                     &portrait,
                                     &data,
                                 ],
@@ -739,7 +716,7 @@ fn handle_telemetry_data(
         limit = records_total;
     }
     let records = transaction.query(
-        "SELECT ts, item_id, product_url, item_id_2, product_url_2, chip_id, uuid_number, bat_voltage, boot_code, error_code, return_code, write_bytes, remote_addr 
+        "SELECT ts, item_id, product_url, item_id_2, product_url_2, bat_voltage, boot_code, remote_addr 
         FROM telemetry 
         ORDER BY ts DESC
         LIMIT $1 OFFSET $2", &[&limit, &offset])?;
@@ -753,14 +730,9 @@ fn handle_telemetry_data(
             product_url: row.get(2),
             item_id_2: row.get(3),
             product_url_2: row.get(4),
-            chip_id: row.get(5),
-            uuid_number: row.get(6),
-            bat_voltage: row.get(7),
-            boot_code: row.get(8),
-            error_code: row.get(9),
-            return_code: row.get(10),
-            write_bytes: row.get(11),
-            remote_addr: row.get(12),
+            bat_voltage: row.get(5),
+            boot_code: row.get(6),
+            remote_addr: row.get(7),
         };
         event_log.push(record);
     }
@@ -867,7 +839,7 @@ fn serve_static_file(request: Request) {
         return;
     }
     let file_path = format!("public/{}", file_name);
-    let file = match File::open(&file_path) {
+    let file = match File::open(file_path) {
         Ok(f) => f,
         Err(_) => {
             serve_error(request, tiny_http::StatusCode(404), "File not found");
@@ -935,11 +907,10 @@ fn dispatch_response<R>(request: Request, mut response: Response<R>)
 where
     R: Read,
 {
-    if response
+    if !response
         .headers()
         .iter()
-        .find(|header| header.field.equiv("Content-Type"))
-        .is_none()
+        .any(|header| header.field.equiv("Content-Type"))
     {
         response = response.with_header(
             tiny_http::Header::from_str("Content-Type: text/html; charset=UTF-8")

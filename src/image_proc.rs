@@ -13,21 +13,21 @@ const PALETTE: [(u8, u8, u8); 7] = [
     (255, 128, 0),   // Orange
 ];
 
-fn get_nearest(colour: (f32, f32, f32)) -> (u8, u8, u8) {
-    let mut nearest_palette_index = 0;
-    let mut lowest_error = (colour.0 - PALETTE[0].0 as f32).powf(2.0)
-        + (colour.1 - PALETTE[0].1 as f32).powf(2.0)
-        + (colour.2 - PALETTE[0].2 as f32).powf(2.0);
-    for i in 1..PALETTE.len() {
-        let candidate_error = (colour.0 - PALETTE[i].0 as f32).powf(2.0)
-            + (colour.1 - PALETTE[i].1 as f32).powf(2.0)
-            + (colour.2 - PALETTE[i].2 as f32).powf(2.0);
+fn get_nearest(test_colour: (f32, f32, f32)) -> (u8, u8, u8) {
+    let mut nearest_colour = PALETTE[0];
+    let mut lowest_error = (test_colour.0 - nearest_colour.0 as f32).powf(2.0)
+        + (test_colour.1 - nearest_colour.1 as f32).powf(2.0)
+        + (test_colour.2 - nearest_colour.2 as f32).powf(2.0);
+    for palette_colour in PALETTE {
+        let candidate_error = (test_colour.0 - palette_colour.0 as f32).powf(2.0)
+            + (test_colour.1 - palette_colour.1 as f32).powf(2.0)
+            + (test_colour.2 - palette_colour.2 as f32).powf(2.0);
         if candidate_error < lowest_error {
             lowest_error = candidate_error;
-            nearest_palette_index = i;
+            nearest_colour = palette_colour;
         }
     }
-    PALETTE[nearest_palette_index]
+    nearest_colour
 }
 
 fn add(colour: (f32, f32, f32), r: f32, g: f32, b: f32, k: f32) -> (f32, f32, f32) {
@@ -71,7 +71,7 @@ pub fn encode_image(image: &DynamicImage) -> Vec<u8> {
         i = replace(&mut j, i);
         e[j] = vec![(0.0, 0.0, 0.0); w];
         for x in 0..w {
-            let r = pixels[((y * w + x) * 3) + 0] as f32 + e[i][x].0;
+            let r = pixels[(y * w + x) * 3] as f32 + e[i][x].0;
             let g = pixels[((y * w + x) * 3) + 1] as f32 + e[i][x].1;
             let b = pixels[((y * w + x) * 3) + 2] as f32 + e[i][x].2;
             let q_colour = get_nearest((r, g, b));

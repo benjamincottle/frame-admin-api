@@ -54,7 +54,7 @@ impl SESSION_MGR {
                 Err(SessionError::ExpiredSession)
             }
         } else {
-            return Err(SessionError::InvalidSession);
+            Err(SessionError::InvalidSession)
         }
     }
 
@@ -87,7 +87,7 @@ impl SESSION_MGR {
             .sample_iter(&Alphanumeric)
             .map(char::from)
             .filter(|&c| {
-                ('a'..='z').contains(&c) || ('A'..='Z').contains(&c) || ('0'..='9').contains(&c)
+                c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit()
             })
             .take(64)
             .collect::<String>()

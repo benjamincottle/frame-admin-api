@@ -18,10 +18,9 @@ use crate::{
     template_mgr::TEMPLATES,
 };
 
-use log;
 use std::{
     env,
-    io::{stdin, BufRead},
+    // io::{stdin, BufRead},
     process::exit,
     sync::Arc,
     thread,
@@ -43,12 +42,9 @@ fn main() {
     let postgres_connection_string = env.postgres_connection_string.clone();
     drop(env);
     let pool_size = 4;
-    match CONNECTION_POOL.initialise(&postgres_connection_string, pool_size) {
-        Err(e) => {
-            log::error!("failed to initialise connection pool: {:?}", e);
-            exit(1);
-        }
-        _ => {}
+    if let Err(e) = CONNECTION_POOL.initialise(&postgres_connection_string, pool_size) {
+        log::error!("failed to set max pool size: {:?}", e);
+        exit(1);
     };
     TEMPLATES.full_reload();
     TASK_BOARD.initialise();
@@ -79,22 +75,22 @@ fn main() {
         });
     }
     loop {
-        let mut input = String::new();
-        stdin().lock().read_line(&mut input).unwrap();
-        if input.trim() == "d" {
-            TASK_BOARD.dump();
-        } else if input.trim() == "s" {
-            SESSION_MGR.dump();
-        } else if input.trim() == "r" {
-            TEMPLATES.full_reload();
-        } else if input.trim() == "u" {
-            println!("[Debug] Users in AppState");
-            println!("[Debug]   Users:");
-            let user_db = app_data.db.lock().unwrap();
-            for user in user_db.iter() {
-                println!("[Debug]      {:?}", user);
-            }
-        }
-        // thread::park();
+        // let mut input = String::new();
+        // stdin().lock().read_line(&mut input).unwrap();
+        // if input.trim() == "d" {
+        //     TASK_BOARD.dump();
+        // } else if input.trim() == "s" {
+        //     SESSION_MGR.dump();
+        // } else if input.trim() == "r" {
+        //     TEMPLATES.full_reload();
+        // } else if input.trim() == "u" {
+        //     println!("[Debug] Users in AppState");
+        //     println!("[Debug]   Users:");
+        //     let user_db = app_data.db.lock().unwrap();
+        //     for user in user_db.iter() {
+        //         println!("[Debug]      {:?}", user);
+        //     }
+        // }
+        thread::park();
     }
 }

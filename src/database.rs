@@ -28,14 +28,14 @@ impl CONNECTION_POOL {
     pub fn get_client(&self) -> Result<Client, std::io::Error> {
         let mut pool = self.lock().unwrap();
         match pool.pop_front() {
-            Some(client) => return Ok(client),
+            Some(client) => Ok(client),
             None => {
-                return Err(std::io::Error::new(
+                Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "connection pool is exhausted",
                 ))
             }
-        };
+        }
     }
 
     pub fn release_client(&self, client: Client) {

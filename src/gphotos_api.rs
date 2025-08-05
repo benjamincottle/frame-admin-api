@@ -29,7 +29,7 @@ pub struct SearchResult<T> {
 pub fn get_mediaitems(
     access_token: &str,
     album_id: &str,
-) -> Result<HashSet<MediaItem>, ureq::Error> {
+) -> Result<HashSet<MediaItem>, Box<dyn std::error::Error>> {
     let mut media_item_list: HashSet<MediaItem> = HashSet::new();
     let mut page_token = "".to_string();
     loop {
@@ -67,17 +67,19 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
         true => format!("{}=w600-h448-d", media_item.baseUrl),
         false => format!("{}=w300-h448-d", media_item.baseUrl),
     };
-    let resp = ureq::get(&path).call()?;
-    let dimage = match resp
+    let response = ureq::get(&path).call()?;
+
+    let dimage = match response
         .header("Content-Length")
         .and_then(|s| s.parse::<usize>().ok())
-        .and_then(|d| {
+        .map(|d| {
             let mut buf: Vec<u8> = Vec::with_capacity(d);
-            resp.into_reader()
+            response
+                .into_reader()
                 .take(10_000_000)
                 .read_to_end(&mut buf)
                 .ok();
-            Some(buf)
+            buf
         })
         .and_then(|buf| image::load_from_memory(buf.as_slice()).ok())
     {
@@ -101,7 +103,7 @@ pub struct PhotoAlbum {
     mediaItemsCount: String,
 }
 
-pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, ureq::Error> {
+pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std::error::Error>> {
     let mut album_list = Vec::new();
     let mut page_token = "".to_string();
     loop {
@@ -109,7 +111,7 @@ pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, ureq::Error
             ureq::get("https://photoslibrary.googleapis.com/v1/albums")
                 .set("Authorization", format!("Bearer {}", access_token).as_str())
                 .set("Content-Type", "Content-type: application/json")
-                .query_pairs(vec![("pageToken", page_token.as_str()), ("pageSize", "50")])
+                .query_pairs(vec![("pageToken", page_token.as_str())])
                 .call()?
                 .into_json()?;
         for album in response.result {
