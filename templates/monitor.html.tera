@@ -1,5 +1,5 @@
 {% extends 'base.html.tera' %}
-{% block title %}System Telemetry{% endblock %}
+{% block title %}Monitor{% endblock %}
 {% block head %}
     {{ super() }}
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
@@ -119,7 +119,6 @@
               <tr>
                   <th>Timestamp</th>
                   <th>Item Id</th>
-                  <th>Product Url</th>                
                   <th>Batt Voltage</th>
                   <th>Boot Code</th>
                   <th>Remote Addr</th>
@@ -167,8 +166,8 @@
             },
           },
           columnDefs: [
-            { targets: [1, 2], visible: false },
-            { targets: [0, 3, 4, 5], type: "num" },
+            { targets: [1], visible: false },
+            { targets: [0, 2, 3, 4], type: "num" },
             {
               targets: 0,
               render: function (data, type, row, meta) {
@@ -179,7 +178,6 @@
           columns: [
             { data: "ts" },
             { data: "item_id" },
-            { data: "product_url" },
             { data: "bat_voltage" },
             { data: "boot_code" },
             { data: "remote_addr" },
@@ -268,7 +266,7 @@
         series.setData(dataArray);
       }
 
-      function updatePhoto(src, href, src2, href2, code) {
+      function updatePhoto(src, src2, code) {
         const canvas = document.getElementById("photo");
         const ctx = canvas.getContext("2d");
         if ((src == null) && (src2 == null)) {
@@ -316,10 +314,10 @@
 
       function setTableEvents(table) {
         table.on("init", () => {
-          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["product_url"], table.rows(0).data()[0]["item_id_2"], table.rows(0).data()[0]["product_url_2"], table.rows(0).data()[0]["error_code"]);
+          updatePhoto(table.rows(0).data()[0]["item_id"], table.rows(0).data()[0]["item_id_2"], table.rows(0).data()[0]["error_code"]);
         })
         .on('click', 'tr', function() {
-          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["product_url"], table.row(this).data()["item_id_2"], table.row(this).data()["product_url_2"], table.row(this).data()["error_code"]);
+          updatePhoto(table.row(this).data()["item_id"], table.row(this).data()["item_id_2"], table.row(this).data()["error_code"]);
         })
         .on('dblclick', 'td', function() {
           var cellData = table.cell(this).data();

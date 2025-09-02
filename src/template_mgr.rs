@@ -24,15 +24,18 @@ lazy_static! {
             urls.insert("login".to_string(), "/frame_admin/oauth/login".to_string());
             urls.insert(
                 "logout".to_string(),
-                "/frame_admin/oauth/logout".to_string(),
+                "/frame_admin/oauth/logout".to_string()
             );
-            urls.insert("config".to_string(), "/frame_admin/config".to_string());
-            urls.insert("docs".to_string(), "/frame_admin/docs".to_string());
-            urls.insert("profile".to_string(), "/frame_admin/profile".to_string());
-            urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
+            // urls.insert("config".to_string(), "/frame_admin/config".to_string());
+            // urls.insert("docs".to_string(), "/frame_admin/docs".to_string());
+            // urls.insert("sync".to_string(), "/frame_admin/sync".to_string());
             urls.insert(
-                "telemetry".to_string(),
-                "/frame_admin/telemetry".to_string(),
+                "monitor".to_string(),
+                "/frame_admin/monitor".to_string(),
+            );
+            urls.insert(
+                "manage".to_string(),
+                "/frame_admin/manage".to_string(),
             );
             urls.insert(
                 "revoke".to_string(),
@@ -67,8 +70,11 @@ fn make_url_for(urls: BTreeMap<String, String>) -> impl Function {
         move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
             match args.get("name") {
                 Some(val) => match tera::from_value::<String>(val.clone()) {
-                    Ok(v) => Ok(tera::to_value(urls.get(&v).expect("key exists"))
-                        .expect("couldn't convert value to tera::Value")),
+                    Ok(v) => {
+                        // log::info!("(make_url_for) looking for name: {}", v);
+                        Ok(tera::to_value(urls.get(&v).expect("assert key exists"))
+                        .expect("couldn't convert value to tera::Value"))
+                    },
                     Err(e) => Err(format!("(make_url_for) no match for name: {}", e).into()),
                 },
                 None => Err("(make_url_for) no value for name".into()),

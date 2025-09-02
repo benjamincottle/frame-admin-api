@@ -5,7 +5,7 @@ use std::{env, fs::File, io::BufReader, path::PathBuf};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub postgres_connection_string: String,
-    pub google_photos_album_ids: Vec<String>,
+    // pub google_photos_album_ids: Vec<String>,
     pub jwt_secret: String,
     pub jwt_max_age: i64,
     pub google_oauth_client_id: String,
@@ -29,7 +29,7 @@ impl Config {
                 Config {
                     postgres_connection_string: env::var("POSTGRES_CONNECTION_STRING")
                         .expect("POSTGRES_CONNECTION_STRING not set"),
-                    google_photos_album_ids: vec![],
+                    // google_photos_album_ids: vec![],
                     jwt_secret: generate_secret(),
                     jwt_max_age: env::var("TOKEN_MAXAGE")
                         .expect("TOKEN_MAXAGE not set")

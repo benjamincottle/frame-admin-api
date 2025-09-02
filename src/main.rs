@@ -20,7 +20,7 @@ use crate::{
 
 use std::{
     env,
-    // io::{stdin, BufRead},
+    io::{stdin, BufRead},
     process::exit,
     sync::Arc,
     thread,
@@ -75,6 +75,8 @@ fn main() {
         });
     }
     loop {
+        // This won't work when the system is running in a docker container
+        // but it's useful for debugging when running natively.
         // let mut input = String::new();
         // stdin().lock().read_line(&mut input).unwrap();
         // if input.trim() == "d" {

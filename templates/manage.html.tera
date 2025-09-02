@@ -1,0 +1,6 @@
+{% extends 'base.html.tera' %}
+{% block title %}Manage{% endblock %}
+{% block content %}
+  <h1>Manage</h1>
+  <p>Welcome to the management page.</p>
+{% endblock content %}

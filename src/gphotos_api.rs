@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
+use core::str;
 use std::{collections::HashSet, io::Read};
 
 #[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
@@ -24,6 +25,24 @@ pub struct SearchResult<T> {
     #[serde(alias = "albums", alias = "mediaItems")]
     result: Vec<T>,
     nextPageToken: Option<String>,
+}
+
+pub struct PollingConfig {
+    pub pollInterval: String,
+    pub timeoutIn: String,
+}
+
+pub struct PickingConfig {
+    pub maxItemCount: String,
+}
+
+pub struct PickingSession {
+    pub id: String,
+    pub pickerUri: String,
+    pub pollingConfig: PollingConfig,
+    pub expireTime: String,
+    pub pickingConfig: PickingConfig,
+    pub mediaItemsSet: bool,
 }
 
 pub fn get_mediaitems(
