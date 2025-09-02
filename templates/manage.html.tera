@@ -55,15 +55,21 @@
     })
     .then(response => response.json())
     .then(data => {
+      const container = document.getElementById("session-response");
+      container.innerHTML = "";
+
+      const dubug_output = document.createElement("pre");
+      dubug_output.textContent = JSON.stringify(data, null, 2);
+      container.appendChild(dubug_output);
+      
       const pickerLink = document.createElement("a");
       pickerLink.href =  data.pickerUri;
       pickerLink.textContent = "Open Picking Session";
       pickerLink.target = "_blank";
       pickerLink.className = "pickerLink";
       pickerLink.rel = "noopener noreferrer";
-      const container = document.getElementById("session-response");
-      container.innerHTML = "";
       container.appendChild(pickerLink);
+
       const qrCanvas = document.createElement("canvas");
       var opts = {
         errorCorrectionLevel: 'H',
@@ -75,7 +81,6 @@
           light:"#C0C0C0FF"
         }
       }
-
       QRCode.toCanvas(qrCanvas, data.pickerUri, opts, function (error) {
         if (error) console.error(error)
       })
@@ -100,6 +105,7 @@
         })
       });
       container.appendChild(deleteButton);
+
     })
     .catch(error => {
       console.error("Error:", error);
