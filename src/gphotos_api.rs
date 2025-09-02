@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
+use ureq::Response;
 use core::str;
 use std::{collections::HashSet, io::Read};
 
@@ -27,23 +28,78 @@ pub struct SearchResult<T> {
     nextPageToken: Option<String>,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PollingConfig {
     pub pollInterval: String,
     pub timeoutIn: String,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PickingConfig {
     pub maxItemCount: String,
 }
 
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PickingSession {
     pub id: String,
     pub pickerUri: String,
-    pub pollingConfig: PollingConfig,
+    pub pollingConfig: Option<PollingConfig>,
     pub expireTime: String,
-    pub pickingConfig: PickingConfig,
+    pub pickingConfig: Option<PickingConfig>,
     pub mediaItemsSet: bool,
 }
+
+impl PickingSession {
+    pub fn new(
+        access_token: &str,
+    ) -> Result<PickingSession, Box<dyn std::error::Error>> {
+        let response: PickingSession = ureq::post("https://photospicker.googleapis.com/v1/sessions")
+            .set("Authorization", format!("Bearer {}", access_token).as_str())
+            .set("Content-Type", "Content-type: application/json")
+            .send_json(&ureq::json!({}))?
+            .into_json()?;
+        Ok(response)
+    }
+
+    pub fn delete(
+        access_token: &str,
+        session_id: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+        let response: serde_json::Value = ureq::delete(
+            format!(
+                "https://photospicker.googleapis.com/v1/sessions/{}",
+                session_id
+            )
+            .as_str(),
+        )
+        .set("Authorization", format!("Bearer {}", access_token).as_str())
+        .set("Content-Type", "Content-type: application/json")
+        .call()?
+        .into_json()?;
+        Ok(response)
+    }
+
+    pub fn poll(
+        access_token: &str,
+        session_id: &str,
+    ) -> Result<PickingSession, Box<dyn std::error::Error>> {
+        let response: PickingSession = ureq::get(
+            format!(
+                "https://photospicker.googleapis.com/v1/sessions/{}",
+                session_id
+            )
+            .as_str(),
+        )
+        .set("Authorization", format!("Bearer {}", access_token).as_str())
+        .set("Content-Type", "Content-type: application/json")
+        .call()?
+        .into_json()?;
+        Ok(response)
+    }
+}
+
+
+
 
 pub fn get_mediaitems(
     access_token: &str,

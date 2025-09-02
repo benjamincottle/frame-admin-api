@@ -1,6 +1,110 @@
 {% extends 'base.html.tera' %}
 {% block title %}Manage{% endblock %}
+
+{% block head %}
+  {{ super() }}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.js" referrerpolicy="no-referrer"></script>
+  <style>
+    #session-response {
+      margin-top: 20px;
+    }
+    .pickerLink {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #1a73e8;
+      text-decoration: none;
+    }
+    .pickerLink:hover {
+      text-decoration: underline;
+    }
+    canvas {
+      margin-bottom: 10px;
+    }
+    button {
+      display: block;
+      background-color: #1a73e8;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1669c1;
+    }
+  </style>
+{% endblock head %}
+
 {% block content %}
   <h1>Manage</h1>
-  <p>Welcome to the management page.</p>
+
+  <button id="create-session-btn">Create Picking Session</button>
+  <div id="session-response"></div>
+
 {% endblock content %}
+{% block scripts %}
+<script>
+  function createPickingSession() {
+    document.getElementById("create-session-btn").style.display = "none";
+    fetch("/frame_admin/manage", {
+      method: "GET",
+      headers: {
+        "create-picking-session": "1"
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      const pickerLink = document.createElement("a");
+      pickerLink.href =  data.pickerUri;
+      pickerLink.textContent = "Open Picking Session";
+      pickerLink.target = "_blank";
+      pickerLink.className = "pickerLink";
+      pickerLink.rel = "noopener noreferrer";
+      const container = document.getElementById("session-response");
+      container.innerHTML = "";
+      container.appendChild(pickerLink);
+      const qrCanvas = document.createElement("canvas");
+      var opts = {
+        errorCorrectionLevel: 'H',
+        type: 'image/jpeg',
+        quality: 0.4,
+        margin: 1,
+        color: {
+          dark:"#1F2227FF",
+          light:"#C0C0C0FF"
+        }
+      }
+
+      QRCode.toCanvas(qrCanvas, data.pickerUri, opts, function (error) {
+        if (error) console.error(error)
+      })
+      container.appendChild(qrCanvas);
+
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Cancel";
+      deleteButton.addEventListener("click", () => {
+        fetch("/frame_admin/manage", {
+          method: "GET",
+          headers: {
+            "delete-picking-session": data.id
+          }
+        })
+        .then(response => response.text())
+        .then(text => {
+          document.getElementById("create-session-btn").style.display = "block";
+          if (text === "{}") {
+            text = "";
+          }  
+          container.innerHTML = text;
+        })
+      });
+      container.appendChild(deleteButton);
+    })
+    .catch(error => {
+      console.error("Error:", error);
+    });
+  }
+  document.getElementById("create-session-btn").addEventListener("click", createPickingSession);
+</script>
+{% endblock scripts %}

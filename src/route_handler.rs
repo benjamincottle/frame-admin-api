@@ -1,10 +1,10 @@
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
 
 use crate::{
     database::CONNECTION_POOL,
     google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
-    gphotos_api::{get_album_list, get_mediaitems, get_photo, MediaItem},
+    gphotos_api::{get_album_list, get_mediaitems, get_photo, MediaItem, PickingSession},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
     session_mgr::{SessionID, SESSION_MGR},
@@ -223,10 +223,7 @@ fn handle_oauth_authorise(app_data: AppState, request: Request) {
         .append_pair("client_id", google_oauth_client_id)
         .append_pair("redirect_uri", google_oauth_redirect_url)
         .append_pair("response_type", "code")
-        .append_pair(
-            "scope",
-            "openid profile email",
-        )
+        .append_pair("scope", "openid profile email https://www.googleapis.com/auth/photospicker.mediaitems.readonly")
         .append_pair("access_type", "offline")
         // .append_pair("prompt", "consent") // This causes the user to be asked to re-authorise every time, and ensures a refresh token is returned
         .append_pair("state", &state);
@@ -668,6 +665,70 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
             return;
         }
     };
+
+    if let Some(_create_picker_session) = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("create-picking-session"))
+    {
+        let picker_uri_json = ureq::json!(PickingSession::new(&auth_guard.user.credentials.access_token).expect("can't create picking session"));
+        let body = ureq::serde_json::to_string(&picker_uri_json)
+            .expect("can't serialize picking session uri");
+        let response = Response::empty(tiny_http::StatusCode(200))
+            .with_data(body.as_bytes(), Some(body.len()))
+            .with_header(
+                tiny_http::Header::from_str("Content-Type: application/json")
+                    .expect("This should never fail"),
+            );
+        dispatch_response(request, response);
+        return;
+    };
+
+    if let Some(delete_picker_session) = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("delete-picking-session"))
+    {
+        let session_id = delete_picker_session.value.to_string();
+        let delete_response = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id).expect("can't delete picking session");
+
+
+        let delete_response_json = ureq::json!(delete_response);
+        let body = ureq::serde_json::to_string(&delete_response_json)
+            .expect("can't serialize picking session uri");
+        let response = Response::empty(tiny_http::StatusCode(200))
+            .with_data(body.as_bytes(), Some(body.len()))
+            .with_header(
+                tiny_http::Header::from_str("Content-Type: application/json")
+                    .expect("This should never fail"),
+            );
+        dispatch_response(request, response);
+        return;
+    };
+
+    if let Some(poll_picker_session) = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("poll-picking-session"))
+    {
+        let session_id = poll_picker_session.value.to_string();
+        let poll_response = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id).expect("can't poll picking session");
+
+
+        let poll_response_json = ureq::json!(poll_response);
+        let body = ureq::serde_json::to_string(&poll_response_json)
+            .expect("can't serialize picking session uri");
+        let response = Response::empty(tiny_http::StatusCode(200))
+            .with_data(body.as_bytes(), Some(body.len()))
+            .with_header(
+                tiny_http::Header::from_str("Content-Type: application/json")
+                    .expect("This should never fail"),
+            );
+        dispatch_response(request, response);
+        return;
+    };
+
+
     let mut context = Context::new();
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("manage.html.tera", &context);
@@ -751,7 +812,9 @@ fn handle_telemetry_data(
         "SELECT ts, item_id, item_id_2, bat_voltage, boot_code, remote_addr 
         FROM telemetry 
         ORDER BY ts DESC
-        LIMIT $1 OFFSET $2", &[&limit, &offset])?;
+        LIMIT $1 OFFSET $2",
+        &[&limit, &offset],
+    )?;
     transaction.commit()?;
     CONNECTION_POOL.release_client(dbclient);
     let mut event_log: Vec<TelemetryRecord> = Vec::new();
