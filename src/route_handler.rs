@@ -666,12 +666,90 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
         }
     };
 
+    if let Some(header) = request.headers().iter().find(|h| h.field.equiv("picker-session")) {
+        let value = header.value.as_str();
+        let mut parts = value.splitn(2, ':');
+        let action = parts.next().unwrap_or("");
+        let session_id = parts.next();
+
+        fn respond_json<T: serde::Serialize>(request: Request, result: Result<T, impl std::fmt::Debug>) {
+            let json = ureq::json!(result.expect("API call failed"));
+            let body = ureq::serde_json::to_string(&json).expect("can't serialize response");
+            let response = Response::empty(tiny_http::StatusCode(200))
+                .with_data(body.as_bytes(), Some(body.len()))
+                .with_header(
+                    tiny_http::Header::from_str("Content-Type: application/json")
+                        .expect("This should never fail"),
+                );
+            dispatch_response(request, response);
+        }
+
+        match action {
+            "create" => {
+                respond_json(request, PickingSession::create(&auth_guard.user.credentials.access_token));
+            }
+            "delete" => {
+                if let Some(session_id) = session_id {
+                    let session_id = session_id.to_string();
+                    respond_json(request, PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id));
+                }
+            }
+            "poll" => {
+                if let Some(session_id) = session_id {
+                    let session_id = session_id.to_string();
+                    let result = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id);
+                    if let Ok(ref poll_response) = result {
+                        if poll_response.mediaItemsSet {
+                            log::info!("Media items have been set for picking session {}", session_id);
+                            let list = PickingSession::list_picked(&auth_guard.user.credentials.access_token, &session_id);
+                            if let Ok(ref media_items) = list {
+                                log::info!("Media items picked: {:?}", media_items);
+                            } else {
+                                log::error!("Error listing picked media items: {:?}", list.err());
+                            }
+
+                            // log::info!("Media items set, deleting picking session {}", session_id);
+                            // let _ = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id);
+                        }
+                    }
+                    respond_json(request, result);
+                }
+            }
+            _ => {
+                serve_error(request, tiny_http::StatusCode(400), "Invalid picker-session action");
+            }
+        }
+        return;
+    }
+
+    let mut context = Context::new();
+    context.insert("profile", &auth_guard.user.photo);
+    let rendered = TEMPLATES.render("manage.html.tera", &context);
+    let response = Response::from_data(rendered);
+    dispatch_response(request, response);
+}
+
+fn handle_manage_old(request: Request, auth_guard: AuthGuard<ValidUser>) {
+    let auth_guard = match auth_guard {
+        Ok(auth_guard) => auth_guard,
+        Err(_) => {
+            let mut response = Response::empty(tiny_http::StatusCode(302));
+            response.add_header(
+                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
+                    .expect("This should never fail"),
+            );
+            dispatch_response(request, response);
+            return;
+        }
+    };
+
     if let Some(_create_picker_session) = request
         .headers()
         .iter()
         .find(|header| header.field.equiv("create-picking-session"))
     {
-        let picker_uri_json = ureq::json!(PickingSession::new(&auth_guard.user.credentials.access_token).expect("can't create picking session"));
+        let picker_uri = PickingSession::create(&auth_guard.user.credentials.access_token).expect("can't create picking session");
+        let picker_uri_json = ureq::json!(picker_uri);
         let body = ureq::serde_json::to_string(&picker_uri_json)
             .expect("can't serialize picking session uri");
         let response = Response::empty(tiny_http::StatusCode(200))
@@ -691,8 +769,6 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
     {
         let session_id = delete_picker_session.value.to_string();
         let delete_response = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id).expect("can't delete picking session");
-
-
         let delete_response_json = ureq::json!(delete_response);
         let body = ureq::serde_json::to_string(&delete_response_json)
             .expect("can't serialize picking session uri");
@@ -713,8 +789,6 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
     {
         let session_id = poll_picker_session.value.to_string();
         let poll_response = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id).expect("can't poll picking session");
-
-
         let poll_response_json = ureq::json!(poll_response);
         let body = ureq::serde_json::to_string(&poll_response_json)
             .expect("can't serialize picking session uri");

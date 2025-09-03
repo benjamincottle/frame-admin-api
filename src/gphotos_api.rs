@@ -69,7 +69,7 @@ pub struct MediaFile {
     pub baseUrl: String,
     pub mimeType: String,
     pub filename: String,
-    pub mediaFileMedtadata: MediaFileMetadata,
+    pub mediaFileMedtadata: Option<MediaFileMetadata>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -96,6 +96,12 @@ pub struct SearchResult<T> {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+pub struct PickedMediaItemList {
+    mediaItems: Vec<PickedMediaItem>,
+    nextPageToken: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
 pub struct PollingConfig {
     pub pollInterval: String,
     pub timeoutIn: String,
@@ -117,7 +123,7 @@ pub struct PickingSession {
 }
 
 impl PickingSession {
-    pub fn new(
+    pub fn create(
         access_token: &str,
     ) -> Result<PickingSession, Box<dyn std::error::Error>> {
         let response: PickingSession = ureq::post("https://photospicker.googleapis.com/v1/sessions")
@@ -144,6 +150,40 @@ impl PickingSession {
         .call()?
         .into_json()?;
         Ok(response)
+    }
+
+    pub fn list_picked(
+        access_token: &str,
+        session_id: &str,
+    ) -> Result<Vec<PickedMediaItem>, Box<dyn std::error::Error>> {
+        let mut picked_media_items: Vec<PickedMediaItem> = Vec::new();
+        let mut page_token = "".to_string();
+        loop {
+            let mut query = vec![("sessionId", session_id)];
+            if !page_token.is_empty() {
+                query.push(("pageToken", page_token.as_str()));
+            }
+            let response: PickedMediaItemList =
+                ureq::get("https://photospicker.googleapis.com/v1/mediaItems")
+                    .set("Authorization", format!("Bearer {}", access_token).as_str())
+                    .set("Content-Type", "Content-type: application/json")
+                    .query_pairs(query)
+                    .call()?
+                    .into_json()?;
+            for picked_media_item in response.mediaItems {
+                match picked_media_item.type_ {
+                    Type::PHOTO => {
+                        picked_media_items.push(picked_media_item);
+                    }
+                    _ => continue,
+                }
+            }
+            match response.nextPageToken {
+                Some(token) => page_token = token,
+                _ => break,
+            }
+        }
+        Ok(picked_media_items)
     }
 
     pub fn delete(

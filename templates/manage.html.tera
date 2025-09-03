@@ -51,7 +51,7 @@
     fetch("/frame_admin/manage", {
       method: "GET",
       headers: {
-        "create-picking-session": "1"
+        "picker-session": "create"
       }
     })
     .then(response => response.json())
@@ -90,7 +90,7 @@
       fetch("/frame_admin/manage", {
         method: "GET",
         headers: {
-        "delete-picking-session": data.id
+        "picker-session": "delete:" + data.id
         }
       })
       .then(response => response.text())
@@ -118,7 +118,7 @@
       fetch("/frame_admin/manage", {
         method: "GET",
         headers: {
-        "poll-picking-session": data.id
+        "picker-session": "poll:" + data.id
         }
       })
       .then(response => response.json())
