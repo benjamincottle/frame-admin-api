@@ -1,9 +1,18 @@
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 use ureq::Response;
 use core::str;
 use std::{collections::HashSet, io::Read};
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PhotoAlbum {
+    id: String,
+    title: String,
+    coverPhotoBaseUrl: String,
+    mediaItemsCount: String,
+}
 
 #[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
 pub struct MediaMetadata {
@@ -19,6 +28,64 @@ pub struct MediaItem {
     mimeType: String,
     pub mediaMetadata: MediaMetadata,
     filename: String,
+}
+
+// New VV
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum VideoProcessingStatus {
+    UNSPECIFIED,
+    PROCESSING,
+    READY,
+    FAILED,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct VideoMetadata {
+    pub fps: Option<f64>,
+    pub processingStatus: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct PhotoMetadata {
+    pub focalLength: Option<f64>,
+    pub apertureFNumber: Option<f64>,
+    pub isoEquivalent: Option<i32>,
+    pub exposureTime: Option<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct MediaFileMetadata {
+    pub width: i32,
+    pub height: i32,
+    pub cameraMake: Option<String>,
+    pub cameraModel: Option<String>,
+    pub photoMetadata: Option<PhotoMetadata>,
+    pub videoMetadata: Option<VideoMetadata>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct MediaFile {
+    pub baseUrl: String,
+    pub mimeType: String,
+    pub filename: String,
+    pub mediaFileMedtadata: MediaFileMetadata,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub enum Type {
+    TYPE_UNSPECIFIED,
+    PHOTO,
+    VIDEO,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct PickedMediaItem {
+    pub id: String,
+    pub createTime: String,
+    #[serde(rename = "type")]
+    pub type_: Type,
+    pub mediaFile: MediaFile,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -42,7 +109,7 @@ pub struct PickingConfig {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct PickingSession {
     pub id: String,
-    pub pickerUri: String,
+    pub pickerUri: Option<String>,
     pub pollingConfig: Option<PollingConfig>,
     pub expireTime: String,
     pub pickingConfig: Option<PickingConfig>,
@@ -58,24 +125,6 @@ impl PickingSession {
             .set("Content-Type", "Content-type: application/json")
             .send_json(&ureq::json!({}))?
             .into_json()?;
-        Ok(response)
-    }
-
-    pub fn delete(
-        access_token: &str,
-        session_id: &str,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let response: serde_json::Value = ureq::delete(
-            format!(
-                "https://photospicker.googleapis.com/v1/sessions/{}",
-                session_id
-            )
-            .as_str(),
-        )
-        .set("Authorization", format!("Bearer {}", access_token).as_str())
-        .set("Content-Type", "Content-type: application/json")
-        .call()?
-        .into_json()?;
         Ok(response)
     }
 
@@ -96,10 +145,25 @@ impl PickingSession {
         .into_json()?;
         Ok(response)
     }
+
+    pub fn delete(
+        access_token: &str,
+        session_id: &str,
+    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+        let response: serde_json::Value = ureq::delete(
+            format!(
+                "https://photospicker.googleapis.com/v1/sessions/{}",
+                session_id
+            )
+            .as_str(),
+        )
+        .set("Authorization", format!("Bearer {}", access_token).as_str())
+        .set("Content-Type", "Content-type: application/json")
+        .call()?
+        .into_json()?;
+        Ok(response)
+    }
 }
-
-
-
 
 pub fn get_mediaitems(
     access_token: &str,
@@ -170,13 +234,7 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
     Ok(dimage)
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PhotoAlbum {
-    id: String,
-    title: String,
-    coverPhotoBaseUrl: String,
-    mediaItemsCount: String,
-}
+
 
 pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std::error::Error>> {
     let mut album_list = Vec::new();

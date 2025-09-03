@@ -47,6 +47,7 @@
 <script>
   function createPickingSession() {
     document.getElementById("create-session-btn").style.display = "none";
+    let pollInterval;
     fetch("/frame_admin/manage", {
       method: "GET",
       headers: {
@@ -57,10 +58,6 @@
     .then(data => {
       const container = document.getElementById("session-response");
       container.innerHTML = "";
-
-      const dubug_output = document.createElement("pre");
-      dubug_output.textContent = JSON.stringify(data, null, 2);
-      container.appendChild(dubug_output);
       
       const pickerLink = document.createElement("a");
       pickerLink.href =  data.pickerUri;
@@ -89,28 +86,80 @@
       const deleteButton = document.createElement("button");
       deleteButton.textContent = "Cancel";
       deleteButton.addEventListener("click", () => {
-        fetch("/frame_admin/manage", {
-          method: "GET",
-          headers: {
-            "delete-picking-session": data.id
-          }
-        })
-        .then(response => response.text())
-        .then(text => {
-          document.getElementById("create-session-btn").style.display = "block";
-          if (text === "{}") {
-            text = "";
-          }  
-          container.innerHTML = text;
-        })
+      if (pollInterval) clearInterval(pollInterval);
+      fetch("/frame_admin/manage", {
+        method: "GET",
+        headers: {
+        "delete-picking-session": data.id
+        }
+      })
+      .then(response => response.text())
+      .then(text => {
+        document.getElementById("create-session-btn").style.display = "block";
+        if (text === "{}") {
+        text = "";
+        }  
+        container.innerHTML = text;
+      })
       });
       container.appendChild(deleteButton);
 
+      // Helper to parse interval string like "5s" or "2000ms"
+      function parseInterval(intervalStr) {
+      if (typeof intervalStr === "number") return intervalStr;
+      if (intervalStr.endsWith("ms")) return parseInt(intervalStr);
+      if (intervalStr.endsWith("s")) return parseFloat(intervalStr) * 1000;
+      return 1000; // default 1s
+      }
+
+      let currentPollInterval = parseInterval(data.pollingConfig.pollInterval);
+
+      function poll() {
+      fetch("/frame_admin/manage", {
+        method: "GET",
+        headers: {
+        "poll-picking-session": data.id
+        }
+      })
+      .then(response => response.json())
+      .then(updateData => {
+        if (updateData.mediaItemsSet) {
+        clearTimeout(pollInterval);
+        const successMessage = document.createElement("div");
+        successMessage.textContent = "Media items have been set.";
+        container.appendChild(successMessage);
+        document.getElementById("create-session-btn").style.display = "block";
+        } else if (updateData.pollingConfig && updateData.pollingConfig.timeoutIn <= 0) {
+        clearTimeout(pollInterval);
+        const timeoutMessage = document.createElement("div");
+        timeoutMessage.textContent = "Polling timed out. Please try again.";
+        container.appendChild(timeoutMessage);
+        document.getElementById("create-session-btn").style.display = "block";
+        } else {
+        // Adjust polling interval if changed
+        if (updateData.pollingConfig && updateData.pollingConfig.pollInterval) {
+          let newInterval = parseInterval(updateData.pollingConfig.pollInterval);
+          if (newInterval !== currentPollInterval) {
+          currentPollInterval = newInterval;
+          }
+        }
+        pollInterval = setTimeout(poll, currentPollInterval);
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        pollInterval = setTimeout(poll, currentPollInterval);
+      });
+      }
+
+      pollInterval = setTimeout(poll, currentPollInterval);
     })
     .catch(error => {
       console.error("Error:", error);
+      document.getElementById("create-session-btn").style.display = "block";
     });
-  }
+  };
+
   document.getElementById("create-session-btn").addEventListener("click", createPickingSession);
 </script>
 {% endblock scripts %}
