@@ -694,7 +694,7 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
                     respond_json(request, PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id));
                 }
             }
-            "poll" => {
+            "poll-picker-session" => {
                 if let Some(session_id) = session_id {
                     let session_id = session_id.to_string();
                     let result = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id);

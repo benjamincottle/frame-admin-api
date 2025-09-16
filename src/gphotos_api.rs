@@ -69,7 +69,7 @@ pub struct MediaFile {
     pub baseUrl: String,
     pub mimeType: String,
     pub filename: String,
-    pub mediaFileMedtadata: Option<MediaFileMetadata>,
+    pub mediaFileMetadata: MediaFileMetadata,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

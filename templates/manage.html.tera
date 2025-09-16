@@ -49,115 +49,117 @@
     document.getElementById("create-session-btn").style.display = "none";
     let pollInterval;
     fetch("/frame_admin/manage", {
-      method: "GET",
-      headers: {
-        "picker-session": "create"
-      }
-    })
-    .then(response => response.json())
-    .then(data => {
-      const container = document.getElementById("session-response");
-      container.innerHTML = "";
-      
-      const pickerLink = document.createElement("a");
-      pickerLink.href =  data.pickerUri;
-      pickerLink.textContent = "Open Picking Session";
-      pickerLink.target = "_blank";
-      pickerLink.className = "pickerLink";
-      pickerLink.rel = "noopener noreferrer";
-      container.appendChild(pickerLink);
-
-      const qrCanvas = document.createElement("canvas");
-      var opts = {
-        errorCorrectionLevel: 'H',
-        type: 'image/jpeg',
-        quality: 0.4,
-        margin: 1,
-        color: {
-          dark:"#1F2227FF",
-          light:"#C0C0C0FF"
-        }
-      }
-      QRCode.toCanvas(qrCanvas, data.pickerUri, opts, function (error) {
-        if (error) console.error(error)
-      })
-      container.appendChild(qrCanvas);
-
-      const deleteButton = document.createElement("button");
-      deleteButton.textContent = "Cancel";
-      deleteButton.addEventListener("click", () => {
-      if (pollInterval) clearInterval(pollInterval);
-      fetch("/frame_admin/manage", {
         method: "GET",
         headers: {
-        "picker-session": "delete:" + data.id
-        }
-      })
-      .then(response => response.text())
-      .then(text => {
-        document.getElementById("create-session-btn").style.display = "block";
-        if (text === "{}") {
-        text = "";
-        }  
-        container.innerHTML = text;
-      })
-      });
-      container.appendChild(deleteButton);
-
-      // Helper to parse interval string like "5s" or "2000ms"
-      function parseInterval(intervalStr) {
-      if (typeof intervalStr === "number") return intervalStr;
-      if (intervalStr.endsWith("ms")) return parseInt(intervalStr);
-      if (intervalStr.endsWith("s")) return parseFloat(intervalStr) * 1000;
-      return 1000; // default 1s
-      }
-
-      let currentPollInterval = parseInterval(data.pollingConfig.pollInterval);
-
-      function poll() {
-      fetch("/frame_admin/manage", {
-        method: "GET",
-        headers: {
-        "picker-session": "poll:" + data.id
+          "picker-session": "create"
         }
       })
       .then(response => response.json())
-      .then(updateData => {
-        if (updateData.mediaItemsSet) {
-        clearTimeout(pollInterval);
-        const successMessage = document.createElement("div");
-        successMessage.textContent = "Media items have been set.";
-        container.appendChild(successMessage);
-        document.getElementById("create-session-btn").style.display = "block";
-        } else if (updateData.pollingConfig && updateData.pollingConfig.timeoutIn <= 0) {
-        clearTimeout(pollInterval);
-        const timeoutMessage = document.createElement("div");
-        timeoutMessage.textContent = "Polling timed out. Please try again.";
-        container.appendChild(timeoutMessage);
-        document.getElementById("create-session-btn").style.display = "block";
-        } else {
-        // Adjust polling interval if changed
-        if (updateData.pollingConfig && updateData.pollingConfig.pollInterval) {
-          let newInterval = parseInterval(updateData.pollingConfig.pollInterval);
-          if (newInterval !== currentPollInterval) {
-          currentPollInterval = newInterval;
+      .then(data => {
+        const container = document.getElementById("session-response");
+        container.innerHTML = "";
+
+        const pickerLink = document.createElement("a");
+        pickerLink.href = data.pickerUri;
+        pickerLink.textContent = "Open Picking Session";
+        pickerLink.target = "_blank";
+        pickerLink.className = "pickerLink";
+        pickerLink.rel = "noopener noreferrer";
+        container.appendChild(pickerLink);
+
+        const qrCanvas = document.createElement("canvas");
+        var opts = {
+          errorCorrectionLevel: 'H',
+          type: 'image/jpeg',
+          quality: 0.4,
+          margin: 1,
+          color: {
+            dark: "#1F2227FF",
+            light: "#C0C0C0FF"
           }
         }
-        pollInterval = setTimeout(poll, currentPollInterval);
+        QRCode.toCanvas(qrCanvas, data.pickerUri, opts, function(error) {
+          if (error) console.error(error)
+        })
+        container.appendChild(qrCanvas);
+
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Cancel";
+        deleteButton.addEventListener("click", () => {
+          if (pollInterval) clearInterval(pollInterval);
+          fetch("/frame_admin/manage", {
+              method: "GET",
+              headers: {
+                "picker-session": "delete:" + data.id
+              }
+            })
+            .then(response => response.text())
+            .then(text => {
+              document.getElementById("create-session-btn").style.display = "block";
+              if (text === "{}") {
+                text = "";
+              }
+              container.innerHTML = text;
+            })
+        });
+        container.appendChild(deleteButton);
+
+        // Helper to parse interval string like "5s" or "2000ms"
+        function parseInterval(intervalStr) {
+          if (typeof intervalStr === "number") return intervalStr;
+          if (intervalStr.endsWith("ms")) return parseInt(intervalStr);
+          if (intervalStr.endsWith("s")) return parseFloat(intervalStr) * 1000;
+          return 1000; // default 1s
         }
+
+        let currentPollInterval = parseInterval(data.pollingConfig.pollInterval);
+
+        function pollPickerSession() {
+          fetch("/frame_admin/manage", {
+              method: "GET",
+              headers: {
+                "picker-session": "poll-picker-session:" + data.id
+              }
+            })
+            .then(response => response.json())
+            .then(updateData => {
+              if (updateData.mediaItemsSet) {
+                clearTimeout(pollInterval);
+              
+                const successMessage = document.createElement("div");
+                successMessage.textContent = "Media items have been set.";
+                container.appendChild(successMessage);
+              
+                document.getElementById("create-session-btn").style.display = "block";
+              
+              } else if (updateData.pollingConfig && updateData.pollingConfig.timeoutIn <= 0) {
+                clearTimeout(pollInterval);
+                const timeoutMessage = document.createElement("div");
+                timeoutMessage.textContent = "Polling timed out. Please try again.";
+                container.appendChild(timeoutMessage);
+                document.getElementById("create-session-btn").style.display = "block";
+              } else {
+                // Adjust polling interval if changed
+                if (updateData.pollingConfig && updateData.pollingConfig.pollInterval) {
+                  let newInterval = parseInterval(updateData.pollingConfig.pollInterval);
+                  if (newInterval !== currentPollInterval) {
+                    currentPollInterval = newInterval;
+                  }
+                }
+                pollInterval = setTimeout(pollPickerSession, currentPollInterval);
+              }
+            })
+            .catch(error => {
+              console.error("Error:", error);
+              pollInterval = setTimeout(pollPickerSession, currentPollInterval);
+            });
+        }
+        pollInterval = setTimeout(pollPickerSession, currentPollInterval);
       })
       .catch(error => {
         console.error("Error:", error);
-        pollInterval = setTimeout(poll, currentPollInterval);
+        document.getElementById("create-session-btn").style.display = "block";
       });
-      }
-
-      pollInterval = setTimeout(poll, currentPollInterval);
-    })
-    .catch(error => {
-      console.error("Error:", error);
-      document.getElementById("create-session-btn").style.display = "block";
-    });
   };
 
   document.getElementById("create-session-btn").addEventListener("click", createPickingSession);

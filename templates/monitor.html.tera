@@ -249,20 +249,23 @@
       });
 
       function renderChartData(table) {
-        let ts;
-        let bat_voltage;
         let series = Highcharts.charts[0].series[0];
         const dataArray = [];
+        
         table.rows({ search: "applied" }).every(function () {
           const data = this.data();
-          data["error_code"] == 0
-            ? dataArray.push({ x: data["ts"] * 1000, y: data["bat_voltage"] })
-            : dataArray.push({
-                x: data["ts"] * 1000,
-                y: data["bat_voltage"],
-                color: "var(--highcharts-error-point)",
-              });
+          const pointData = {
+            x: data["ts"] * 1000, 
+            y: data["bat_voltage"],
+            timestamp: data["ts"],
+            item_id: data["item_id"]
+          };
+          if (data["error_code"] != 0) {
+            pointData.color = "var(--highcharts-error-point)";
+          }
+          dataArray.push(pointData);
         });
+        dataArray.sort((a, b) => a.x - b.x);
         series.setData(dataArray);
       }
 
@@ -340,12 +343,28 @@
           }, 400);
         })
         .on('mouseover', 'tr', function() {
-           Highcharts.charts[0].series[0].data[table.row(this).index()].setState("hover");
-           Highcharts.charts[0].tooltip.refresh(Highcharts.charts[0].series[0].points[table.row(this).index()]);
+          const rowData = table.row(this).data();
+          const timestamp = rowData["ts"];
+          const chartSeries = Highcharts.charts[0].series[0];
+          const matchingPoint = chartSeries.data.find(point => 
+            point.options.timestamp === timestamp
+          );
+          if (matchingPoint) {
+            matchingPoint.setState("hover");
+            Highcharts.charts[0].tooltip.refresh(matchingPoint);
+          }
         })
         .on('mouseout', 'tr', function() {
-           Highcharts.charts[0].series[0].data[table.row(this).index()].setState("normal");
-           Highcharts.charts[0].tooltip.hide(Highcharts.charts[0].series[0].points[table.row(this).index()]);
+          const rowData = table.row(this).data();
+          const timestamp = rowData["ts"];
+          const chartSeries = Highcharts.charts[0].series[0];
+          const matchingPoint = chartSeries.data.find(point => 
+            point.options.timestamp === timestamp
+          );
+          if (matchingPoint) {
+            matchingPoint.setState("normal");
+            Highcharts.charts[0].tooltip.hide();
+          }
         })
         .on("draw", () => {
           renderChartData(table);
