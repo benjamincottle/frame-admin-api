@@ -2,7 +2,7 @@
 {% block title %}Monitor{% endblock %}
 {% block head %}
     {{ super() }}
-    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.css"/>
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/dt/jq-3.7.0/dt-2.3.4/datatables.min.css"/>
     <style>
       .highcharts-color-0 {
         fill: var(--highcharts-color-0);
@@ -91,6 +91,8 @@
       canvas {
         transition: opacity 0.3s ease-in-out;
         opacity: 0.6;
+        border-radius: 10px;
+        overflow: hidden;
       }
       .copy_notice {
         background-color: var(--copy-notice-background-colour); 
@@ -101,7 +103,7 @@
         z-index: 1000"
       }
     </style>    
-    <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.6.0/dt-1.13.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script type="text/javascript" src="https://cdn.datatables.net/v/dt/jq-3.7.0/dt-2.3.4/datatables.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highcharts/10.3.3/highcharts.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.43/moment-timezone-with-data-10-year-range.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -120,7 +122,7 @@
                   <th>Timestamp</th>
                   <th>Item Id</th>
                   <th>Batt Voltage</th>
-                  <th>Boot Code</th>
+                  <th>Reset Reason</th>
                   <th>Remote Addr</th>
               </tr>
               </thead>
@@ -172,6 +174,11 @@
               targets: 0,
               render: function (data, type, row, meta) {
                 return moment.unix(data).format("DD-MM-YYYY HH:mm");
+              },
+            },
+            { targets: 3,
+              render: function (data, type, row, meta) {
+                return data + " (" + (data == 0 ? "Power reboot" : data == 1 ? "Hardware WDT reset" : data == 2 ? "Fatal exception" : data == 3 ? "Software watchdog reset" : data == 4 ? "Software reset" : data == 5 ? "Deep-sleep" : data == 6 ? "Hardware reset" : "Unknown") + ")";
               },
             },
           ],
@@ -260,8 +267,10 @@
             timestamp: data["ts"],
             item_id: data["item_id"]
           };
-          if (data["error_code"] != 0) {
+          if (data["error_code"] >= 1 && data["error_code"] <= 4) {
             pointData.color = "var(--highcharts-error-point)";
+          } else {
+            pointData.color = "var(--highcharts-color-1)";
           }
           dataArray.push(pointData);
         });

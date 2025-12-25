@@ -33,6 +33,181 @@
     button:hover {
       background-color: #1669c1;
     }
+    .p_layout {
+      width: 100%;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      justify-content: center;
+      padding-top: 16px;
+    }
+    fieldset {
+      border-radius: 4px;
+      cursor: pointer;
+      color: var(--text-colour);
+      border: 3px solid var(--fieldset-border);
+      transition: opacity 0.3s ease-in-out;
+    }
+    fieldset:hover {
+      color: var(--text-colour-highlight);
+      border: 3px solid var(--fieldset-border-highlight);
+    }
+    .fieldset-selected {
+      pointer-events: none;
+      color: var(--text-colour);
+      border: 3px solid var(--fieldset-border);
+      opacity: 0.2;
+    }
+    .fieldset-display-shelf, .fieldset-display-shelf:hover {
+      cursor: default;
+      border: 3px solid var(--fieldset-border);
+      opacity: 1;
+      color: var(--text-colour-highlight);
+      font-size: 1.0em;
+    }
+    .fieldset-album:hover {
+      color: var(--text-colour-highlight);
+      border: 3px solid var(--fieldset-border-highlight);
+    }
+    .fieldset-display-shelf-item, .fieldset-display-shelf-item:hover {
+      pointer-events: all;
+      border: 2px solid var(--fieldset-border-highlight);
+      opacity: 1;
+      color: var(--text-colour-highlight);
+      font-size: 0.8em;
+    }
+    .s_row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      margin-right: 42px;
+    }
+    #display_shelf {
+      width: 100%;
+      min-height: 120px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      padding-bottom: 5px;
+      gap: 12px;
+    }  
+    #pager {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: row;
+      justify-content: flex-start;
+    }
+    .paginate_button {
+      box-sizing: border-box;
+      display: inline-block;
+      min-width: 1.5em;
+      padding: .5em 1em;
+      margin-left: 2px;
+      text-align: center;
+      text-decoration: none !important;
+      cursor: pointer;
+      color: inherit !important;
+      border: 1px solid transparent;
+      border-radius: 2px;
+      background: transparent
+    }
+    .paginate_button.current,
+    .paginate_button.current:hover {
+      pointer-events: none;
+      color:inherit !important;
+      border: 1px solid rgba(0, 0, 0, 0.3);
+      background-color: rgba(230, 230, 230, 0.1);
+      background: linear-gradient(to bottom, rgba(230, 230, 230, 0.1) 0%, rgba(0, 0, 0, 0.1) 100%)
+    }
+    .paginate_button.disabled,
+    .paginate_button.disabled:hover,
+    .paginate_button.disabled:active {
+      cursor: default;
+      color: #666 !important;
+      border: 1px solid transparent;
+      background:transparent;
+      box-shadow: none;
+      pointer-events: none;
+    }
+    .paginate_button:hover {
+      color: white !important;
+      border: 1px solid #111;
+      background-color: #585858;
+      background: linear-gradient(to bottom, #585858 0%, #111 100%)
+    }
+    .paginate_button:active {
+      outline: none;
+      background-color: #2b2b2b;
+      background: linear-gradient(to bottom, #2b2b2b 0%, #0c0c0c 100%);
+      box-shadow: inset 0 0 3px #111
+    }
+    .ellipsis {
+      padding: 0 1em
+    }
+    svg.p_ring {
+      pointer-events: none;
+      opacity: 0.76;
+      fill: none;
+      stroke-width: 2;
+      stroke: #2B2E33;
+    }
+    .y {
+      transition: all 1s ease-in-out;
+      stroke-dasharray: 39.825;
+      stroke-dashoffset: 39.825;
+      stroke: #F6AD01;
+    } 
+    .g {
+      transition: all 1s ease-in-out;
+      stroke-dasharray: 73.72;
+      stroke-dashoffset: 73.72;
+      stroke: #249A41;
+    }
+    .b {
+      transition: all 1s ease-in-out;
+      stroke-dasharray: 67.22;
+      stroke-dashoffset: 67.22;
+      stroke: #3174F1;
+    }
+    .r {
+      transition: all 1s ease-in-out;
+      stroke-dasharray: 74.05;
+      stroke-dashoffset: 74.05;
+      stroke: #E92D18;
+    }
+    .y_b, .g_b, .b_b, .r_b {
+      transition: all 1s ease-in-out;
+    }
+    .t {
+      stroke: none;
+      fill: #c0c0c0;
+      font-family: monospace;
+      font-size: 0.8em;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
+    .sb {
+      cursor: pointer;
+      stroke: #909090;
+      fill: #909090;
+      stroke-width: 50;
+    }
+    .sb:hover {
+      stroke: #a0a0a0;
+      fill: #a0a0a0;
+    }
+    .ci {
+      fill: #2B2E33;
+    }
+    .sy {
+      stroke: none;
+      width: 1em;
+      height: 1em;
+      vertical-align: middle;
+      overflow: hidden;
+      stroke-width: 10;
+    }  
   </style>
 {% endblock head %}
 
@@ -41,6 +216,34 @@
 
   <button id="create-session-btn">Create Picking Session</button>
   <div id="session-response"></div>
+
+  <div>
+    <fieldset class="fieldset-display-shelf">
+      <legend>Selected Albums</legend>
+      <div class="s_row">
+        <div id="display_shelf"></div>
+        <div>
+          <svg id="p_ring" class="p_ring" height="100" focusable="false" version="1.1" viewBox="-2 -2 44 44" xml:space="preserve" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+            <path id="y_b" class="y_b" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" /></path>
+            <path id="y" class="y" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z" /></path>
+            <path id="g_b" class="g_b" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z" /></path>          
+            <path id="g" class="g" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z" /></path>
+            <path id="b_b" class="b_b" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z"/>   
+            <path id="b" class="b" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z" /></path>            
+            <path id="r_b" class="r_b" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z" /></path>          
+            <path id="r" class="r" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z" /></path>
+            <text id="t" class="t" x="46%" y="48%">100%</text>
+            <g id="sb" class="sb" transform="translate(11.76, 11.76) scale(0.016)" onclick="SyncSelected()">
+              <circle id="ci" class="ci" cx="514" cy="514" r="850" />
+              <path id="sy" class="sy" d="M505.6 57.6a20.906667 20.906667 0 0 1 6.4 15.36V170.666667a341.333333 341.333333 0 0 1 295.253333 512 22.186667 22.186667 0 0 1-15.786666 10.24 21.333333 21.333333 0 0 1-17.92-5.973334l-31.146667-31.146666a21.333333 21.333333 0 0 1-3.84-25.173334A253.44 253.44 0 0 0 768 512a256 256 0 0 0-256-256v100.693333a20.906667 20.906667 0 0 1-6.4 15.36l-8.533333 8.533334a21.333333 21.333333 0 0 1-30.293334 0L315.733333 229.973333a21.76 21.76 0 0 1 0-30.293333l151.04-150.613333a21.333333 21.333333 0 0 1 30.293334 0z m51.626667 585.813333a21.333333 21.333333 0 0 0-30.293334 0l-8.533333 8.533334a20.906667 20.906667 0 0 0-6.4 15.36V768a256 256 0 0 1-256-256 248.746667 248.746667 0 0 1 29.866667-119.04 21.76 21.76 0 0 0-3.84-25.173333l-31.573334-31.573334a21.333333 21.333333 0 0 0-17.92-5.973333 22.186667 22.186667 0 0 0-15.786666 11.093333A341.333333 341.333333 0 0 0 512 853.333333v97.706667a20.906667 20.906667 0 0 0 6.4 15.36l8.533333 8.533333a21.333333 21.333333 0 0 0 30.293334 0l151.04-150.613333a21.76 21.76 0 0 0 0-30.293333z" ></path>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </fieldset>
+  </div>
+  <div id="pager"></div>
+  <div id="album_list" class="p_layout"></div>
 
 {% endblock content %}
 {% block scripts %}
