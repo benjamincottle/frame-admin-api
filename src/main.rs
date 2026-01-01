@@ -20,7 +20,7 @@ use crate::{
 
 use std::{
     env,
-    io::{stdin, BufRead},
+    io::{BufRead, stdin},
     process::exit,
     sync::Arc,
     thread,
@@ -28,15 +28,15 @@ use std::{
 use tiny_http::Server;
 
 fn main() {
-    // for debugging purposes
-    if env::var_os("RUST_LOG").is_none() {
-        env::set_var("RUST_LOG", "info");
-    }
-    if env::var_os("RUST_BACKTRACE").is_none() {
-        env::set_var("RUST_BACKTRACE", "1");
-    }
+    env_logger::Builder::from_env(
+        env_logger::Env::default().default_filter_or("info")
+    ).init();
+    #[cfg(debug_assertions)]
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("{info}");
+        eprintln!("{}", std::backtrace::Backtrace::force_capture());
+    }));
     dotenv::from_filename("secrets/.env").ok();
-    env_logger::init();
     let app_data = AppState::init("secrets/");
     let env = app_data.env.lock().unwrap();
     let postgres_connection_string = env.postgres_connection_string.clone();
@@ -59,19 +59,21 @@ fn main() {
     for _ in 0..4 {
         let server = server.clone();
         let app_data = app_data.clone();
-        thread::spawn(move || loop {
-            let request = match server.recv() {
-                Ok(r) => r,
-                Err(e) => {
-                    log::error!("could not receive request: {}", e);
+        thread::spawn(move || {
+            loop {
+                let request = match server.recv() {
+                    Ok(r) => r,
+                    Err(e) => {
+                        log::error!("could not receive request: {}", e);
+                        continue;
+                    }
+                };
+                if request.method().as_str() != "GET" {
+                    serve_error(request, tiny_http::StatusCode(405), "Method not allowed");
                     continue;
                 }
-            };
-            if request.method().as_str() != "GET" {
-                serve_error(request, tiny_http::StatusCode(405), "Method not allowed");
-                continue;
+                route_request(app_data.clone(), request);
             }
-            route_request(app_data.clone(), request);
         });
     }
     loop {

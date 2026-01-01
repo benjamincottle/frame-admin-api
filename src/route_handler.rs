@@ -71,6 +71,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     // router.add("/frame_admin/sync", "sync".to_string());
     // router.add("/frame_admin/sync_progress", "sync_progress".to_string());
     router.add("/frame_admin/monitor", "monitor".to_string());
+    router.add("/frame_admin/album_data", "album_data".to_string());
     router.add("/frame_admin/manage", "manage".to_string());
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
     // router.add("/frame_admin/tasks", "tasks".to_string());
@@ -122,6 +123,9 @@ pub fn route_request(app_data: AppState, request: Request) {
         // }
         "monitor" => {
             handle_monitor(request, auth_guard);
+        }
+        "album_data" => {
+            handle_album_data(request, auth_guard);
         }
         "manage" => {
             handle_manage(request, auth_guard);
@@ -694,7 +698,7 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
                     respond_json(request, PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id));
                 }
             }
-            "poll-picker-session" => {
+            "poll" => {
                 if let Some(session_id) = session_id {
                     let session_id = session_id.to_string();
                     let result = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id);
@@ -708,8 +712,8 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
                                 log::error!("Error listing picked media items: {:?}", list.err());
                             }
 
-                            // log::info!("Media items set, deleting picking session {}", session_id);
-                            // let _ = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id);
+                            log::info!("Media items set, deleting picking session {}", session_id);
+                            let _ = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id);
                         }
                     }
                     respond_json(request, result);
@@ -742,7 +746,80 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
             return;
         }
     };
-    todo!();
+
+    let params = extract_params(request.url());
+    let page: i64 = params.get("page").and_then(|v| v.parse().ok()).filter(|p| *p > 0).unwrap_or(1);
+    let page_size: i64 = params.get("pageSize").and_then(|v| v.parse::<i64>().ok()).filter(|s| *s > 0).map(|s| s.min(24)).unwrap_or(12);
+    let offset = (page - 1) * page_size;
+
+    let mut dbclient = match CONNECTION_POOL.get_client() {
+        Ok(c) => c,
+        Err(e) => {
+            log::error!("(handle_album_data) DB pool error: {:?}", e);
+            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            return;
+        }
+    };
+
+    let rows = match dbclient.query(
+        "SELECT item_id, ts, portrait FROM album ORDER BY ts DESC LIMIT $1 OFFSET $2",
+        &[&page_size, &offset],
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            log::error!("(handle_album_data) query error: {:?}", e);
+            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            return;
+        }
+    };
+
+    let total: i64 = match dbclient.query_one("SELECT count(*) FROM album", &[]) {
+        Ok(r) => r.get(0),
+        Err(e) => {
+            log::error!("(handle_album_data) count error: {:?}", e);
+            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            return;
+        }
+    };
+    CONNECTION_POOL.release_client(dbclient);
+
+    let mut items = Vec::new();
+    for row in rows {
+        let id: String = row.get(0);
+        let ts_secs: i64 = row.get(1);
+        let portrait: bool = row.get(2);
+        let ts_iso = chrono::DateTime::<chrono::Utc>::from_timestamp(ts_secs, 0)
+            .map(|dt| dt.to_rfc3339());
+        items.push(ureq::json!({
+            "id": id,
+            "thumbUrl": format!("/frame_admin/image/{}?size=thumb", id),
+            "productUrl": Option::<String>::None,
+            "ts": ts_iso,
+            "portrait": portrait,
+        }));
+    }
+
+    let body = match ureq::serde_json::to_string(&ureq::json!({
+        "items": items,
+        "page": page,
+        "pageSize": page_size,
+        "total": total,
+    })) {
+        Ok(b) => b,
+        Err(e) => {
+            log::error!("(handle_album_data) serialize error: {:?}", e);
+            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            return;
+        }
+    };
+
+    let response = Response::empty(tiny_http::StatusCode(200))
+        .with_data(body.as_bytes(), Some(body.len()))
+        .with_header(
+            tiny_http::Header::from_str("Content-Type: application/json")
+                .expect("This should never fail"),
+        );
+    dispatch_response(request, response);
 }
 
 fn handle_monitor(request: Request, auth_guard: AuthGuard<ValidUser>) {
@@ -864,6 +941,8 @@ fn handle_image(
             return Ok(());
         }
     };
+    let query_params = extract_params(request.url());
+    let is_thumb = matches!(query_params.get("size"), Some(v) if v == "thumb");
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let data: Vec<u8> = match dbclient
         .query("SELECT data FROM album WHERE item_id = $1", &[&image_id])?
@@ -877,10 +956,18 @@ fn handle_image(
         }
     };
     CONNECTION_POOL.release_client(dbclient);
-    let (nwidth, nheight) = match data.len() {
-        134400 => (350, 261),
-        67200 => (175, 261),
-        _ => unreachable!(),
+    let (nwidth, nheight) = if is_thumb {
+        match data.len() {
+            134400 => (120, 90),  // landscape thumbnail
+            67200 => (90, 120),   // portrait thumbnail
+            _ => unreachable!(),
+        }
+    } else {
+        match data.len() {
+            134400 => (350, 261),
+            67200 => (175, 261),
+            _ => unreachable!(),
+        }
     };
     let dynamic_image = decode_image(data)?;
     let resized_dynamic_image = dynamic_image.resize_to_fill(nwidth, nheight, FilterType::Lanczos3);
