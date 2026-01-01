@@ -1,5 +1,6 @@
 use chrono::{Duration, Utc};
 use serde::{de, Deserialize, Serialize};
+use serde_json;
 
 use crate::{
     database::CONNECTION_POOL,
@@ -677,8 +678,8 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
         let session_id = parts.next();
 
         fn respond_json<T: serde::Serialize>(request: Request, result: Result<T, impl std::fmt::Debug>) {
-            let json = ureq::json!(result.expect("API call failed"));
-            let body = ureq::serde_json::to_string(&json).expect("can't serialize response");
+            let json = serde_json::json!(result.expect("API call failed"));
+            let body = serde_json::to_string(&json).expect("can't serialize response");
             let response = Response::empty(tiny_http::StatusCode(200))
                 .with_data(body.as_bytes(), Some(body.len()))
                 .with_header(
@@ -790,7 +791,7 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
         let portrait: bool = row.get(2);
         let ts_iso = chrono::DateTime::<chrono::Utc>::from_timestamp(ts_secs, 0)
             .map(|dt| dt.to_rfc3339());
-        items.push(ureq::json!({
+        items.push(serde_json::json!({
             "id": id,
             "thumbUrl": format!("/frame_admin/image/{}?size=thumb", id),
             "productUrl": Option::<String>::None,
@@ -799,7 +800,7 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
         }));
     }
 
-    let body = match ureq::serde_json::to_string(&ureq::json!({
+    let body = match serde_json::to_string(&serde_json::json!({
         "items": items,
         "page": page,
         "pageSize": page_size,
@@ -899,13 +900,13 @@ fn handle_telemetry_data(
         };
         event_log.push(record);
     }
-    let event_log = ureq::json!({
-        "data": ureq::serde_json::to_value(&event_log)?,
+    let event_log = serde_json::json!({
+        "data": serde_json::to_value(&event_log)?,
         "recordsFiltered": records_total,
         "recordsTotal": records_total,
         "draw": Some(draw),
     });
-    let body = ureq::serde_json::to_string(&event_log)?;
+    let body = serde_json::to_string(&event_log)?;
     let rendered = body.as_bytes();
     let response = Response::empty(tiny_http::StatusCode(200))
         .with_data(rendered, Some(rendered.len()))

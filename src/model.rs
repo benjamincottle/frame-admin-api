@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::{
     fs::File,
     io::{BufReader, BufWriter},
@@ -21,7 +22,7 @@ impl AppState {
         match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let db = ureq::serde_json::from_reader(reader).expect("couldn't deserialise db");
+                let db = serde_json::from_reader(reader).expect("couldn't deserialise db");
                 log::info!("appstate initialised");
                 AppState {
                     db: Arc::new(Mutex::new(db)),
@@ -43,8 +44,7 @@ impl AppState {
         let config_path = PathBuf::from(config_dir).join("user_db.json");
         let file = File::create(config_path).expect("couldn't create user_db file");
         let writer = BufWriter::new(file);
-        ureq::serde_json::to_writer_pretty(writer, &db.clone())
-            .expect("couldn't write user_db to file");
+        serde_json::to_writer_pretty(writer, &db.clone()).expect("couldn't write user_db to file");
         drop(db);
         let env = self.env.lock().unwrap();
         env.save(config_dir);

@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
 use std::{
     collections::HashMap,
     sync::Mutex,

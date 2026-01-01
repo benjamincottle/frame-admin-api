@@ -1,6 +1,7 @@
 use crate::model::{AppState, TokenClaims, User};
 
 use chrono::Utc;
+use serde_json;
 use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -42,15 +43,16 @@ pub fn request_token(
     let client_id = env.google_oauth_client_id.to_owned();
     drop(env);
     let response = ureq::post("https://oauth2.googleapis.com/token")
-        .set("Content-Type", "application/x-www-form-urlencoded")
-        .send_string(&format!(
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send(format!(
             "client_id={}&client_secret={}&code={}&grant_type=authorization_code&redirect_uri={}",
             client_id, client_secret, authorization_code, redirect_url
         ));
     if response.is_ok() {
         let oauth_creds = response
             .expect("response is ok")
-            .into_json::<OAuthCreds>()?;
+            .into_body()
+            .read_json::<OAuthCreds>()?;
         let parser = JWTParser::new(&client_id).expect("couldn't create JWTParser");
         let claims = parser
             .parse::<TokenClaims>(&oauth_creds.id_token.clone().expect("id_token is some"))
@@ -125,15 +127,16 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
         .to_owned()
         .expect("refresh token should be present");
     let response = ureq::post("https://oauth2.googleapis.com/token")
-        .set("Content-Type", "application/x-www-form-urlencoded")
-        .send_string(&format!(
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send(format!(
             "client_id={}&client_secret={}&grant_type=refresh_token&refresh_token={}",
             client_id, client_secret, refresh_token
         ));
     if response.is_ok() {
         let mut oauth_creds = response
             .expect("response is ok")
-            .into_json::<OAuthCreds>()?;
+            .into_body()
+            .read_json::<OAuthCreds>()?;
         let expires_in = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -170,8 +173,8 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
 
 pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<ureq::Error>> {
     ureq::post("https://oauth2.googleapis.com/revoke")
-        .set("Content-Type", "application/x-www-form-urlencoded")
-        .send_string(&format!("token={}", user.credentials.access_token))?;
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .send(format!("token={}", user.credentials.access_token))?;
     let mut user_db = app_data.db.lock().unwrap();
     let user_to_update = user_db
         .iter_mut()
@@ -189,12 +192,12 @@ pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<ureq::Er
 
 pub fn get_google_user(access_token: &str) -> Result<GoogleUserResult, Box<dyn Error>> {
     let response = ureq::get("https://www.googleapis.com/oauth2/v1/userinfo?alt=json")
-        .set("Content-Type", "application/json")
-        .set("Authorization", format!("Bearer {}", access_token).as_str())
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {}", access_token).as_str())
         .call();
 
     if response.is_ok() {
-        let user_info: GoogleUserResult = response?.into_json()?;
+        let user_info: GoogleUserResult = response?.into_body().read_json()?;
         Ok(user_info)
     } else {
         let message = "An error occurred while trying to retrieve user information.";
@@ -310,7 +313,7 @@ impl JWTParser {
     pub fn new(client_id: &str) -> Result<Self, Box<dyn Error>> {
         let oidc_config_url = "https://accounts.google.com/.well-known/openid-configuration";
         let oidc_config_resp = ureq::get(oidc_config_url).call()?;
-        let oidc_config: ureq::serde_json::Value = oidc_config_resp.into_json()?;
+        let oidc_config: serde_json::Value = oidc_config_resp.into_body().read_json()?;
         let jwks_uri = oidc_config["jwks_uri"]
             .as_str()
             .expect("can't get jwks_uri as str");
@@ -372,14 +375,18 @@ impl GooglePublicKeyProvider {
     pub fn reload(&mut self) -> Result<(), GoogleKeyProviderError> {
         match ureq::get(&self.url).call() {
             Ok(r) => {
-                let expiration_time = r.header("cache-control").and_then(|v| {
-                    v.split(',')
-                        .find(|s| s.contains("max-age"))
-                        .and_then(|s| s.split('=').nth(1))
-                        .and_then(|s| s.parse::<u64>().ok())
-                        .map(|s| Instant::now() + std::time::Duration::from_secs(s))
-                });
-                match r.into_json::<GoogleKeys>() {
+                let expiration_time = r
+                    .headers()
+                    .get("cache-control")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|v| {
+                        v.split(',')
+                            .find(|s| s.contains("max-age"))
+                            .and_then(|s| s.split('=').nth(1))
+                            .and_then(|s| s.parse::<u64>().ok())
+                    })
+                    .map(|s| Instant::now() + std::time::Duration::from_secs(s));
+                match r.into_body().read_json::<GoogleKeys>() {
                     Ok(google_keys) => {
                         self.keys.clear();
                         for key in google_keys.keys.into_iter() {

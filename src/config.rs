@@ -1,4 +1,5 @@
-use rand::{distributions::Alphanumeric, Rng};
+use rand::{distr::Alphanumeric, Rng};
+use serde_json;
 use serde::{Deserialize, Serialize};
 use std::{env, fs::File, io::BufReader, path::PathBuf};
 
@@ -20,7 +21,7 @@ impl Config {
             Ok(f) => {
                 let reader = BufReader::new(f);
                 let config =
-                    ureq::serde_json::from_reader(reader).expect("couldn't deserialise config");
+                    serde_json::from_reader(reader).expect("couldn't deserialise config");
                 log::info!("config initialised");
                 config
             }
@@ -50,8 +51,7 @@ impl Config {
         let config_path = PathBuf::from(config_dir).join("config.json");
         let config_file = std::fs::File::create(config_path).expect("couldn't create config file");
         let writer = std::io::BufWriter::new(config_file);
-        ureq::serde_json::to_writer_pretty(writer, &self.clone())
-            .expect("couldn't write config to file");
+        serde_json::to_writer_pretty(writer, &self.clone()).expect("couldn't write config to file");
         log::info!("config saved");
     }
 }

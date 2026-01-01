@@ -2,9 +2,9 @@
 #![allow(non_camel_case_types)]
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
-use ureq::Response;
 use core::str;
 use std::{collections::HashSet, io::Read};
+use serde_json::json;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PhotoAlbum {
@@ -126,30 +126,28 @@ impl PickingSession {
     pub fn create(
         access_token: &str,
     ) -> Result<PickingSession, Box<dyn std::error::Error>> {
-        let response: PickingSession = ureq::post("https://photospicker.googleapis.com/v1/sessions")
-            .set("Authorization", format!("Bearer {}", access_token).as_str())
-            .set("Content-Type", "Content-type: application/json")
-            .send_json(&ureq::json!({}))?
-            .into_json()?;
-        Ok(response)
+        let response = ureq::post("https://photospicker.googleapis.com/v1/sessions")
+            .header("Authorization", format!("Bearer {}", access_token).as_str())
+            .header("Content-Type", "application/json")
+            .send_json(&json!({}))?;
+        Ok(response.into_body().read_json()?)
     }
 
     pub fn poll(
         access_token: &str,
         session_id: &str,
     ) -> Result<PickingSession, Box<dyn std::error::Error>> {
-        let response: PickingSession = ureq::get(
+        let response = ureq::get(
             format!(
                 "https://photospicker.googleapis.com/v1/sessions/{}",
                 session_id
             )
             .as_str(),
         )
-        .set("Authorization", format!("Bearer {}", access_token).as_str())
-        .set("Content-Type", "Content-type: application/json")
-        .call()?
-        .into_json()?;
-        Ok(response)
+        .header("Authorization", format!("Bearer {}", access_token).as_str())
+        .header("Content-Type", "application/json")
+        .call()?;
+        Ok(response.into_body().read_json()?)
     }
 
     pub fn list_picked(
@@ -165,11 +163,12 @@ impl PickingSession {
             }
             let response: PickedMediaItemList =
                 ureq::get("https://photospicker.googleapis.com/v1/mediaItems")
-                    .set("Authorization", format!("Bearer {}", access_token).as_str())
-                    .set("Content-Type", "Content-type: application/json")
+                    .header("Authorization", format!("Bearer {}", access_token).as_str())
+                    .header("Content-Type", "application/json")
                     .query_pairs(query)
                     .call()?
-                    .into_json()?;
+                    .into_body()
+                    .read_json()?;
             for picked_media_item in response.mediaItems {
                 match picked_media_item.type_ {
                     Type::PHOTO => {
@@ -190,18 +189,17 @@ impl PickingSession {
         access_token: &str,
         session_id: &str,
     ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let response: serde_json::Value = ureq::delete(
+        let response = ureq::delete(
             format!(
                 "https://photospicker.googleapis.com/v1/sessions/{}",
                 session_id
             )
             .as_str(),
         )
-        .set("Authorization", format!("Bearer {}", access_token).as_str())
-        .set("Content-Type", "Content-type: application/json")
-        .call()?
-        .into_json()?;
-        Ok(response)
+        .header("Authorization", format!("Bearer {}", access_token).as_str())
+        .header("Content-Type", "application/json")
+        .call()?;
+        Ok(response.into_body().read_json()?)
     }
 }
 
@@ -212,17 +210,18 @@ pub fn get_mediaitems(
     let mut media_item_list: HashSet<MediaItem> = HashSet::new();
     let mut page_token = "".to_string();
     loop {
-        let body = ureq::json!({
+        let body = json!({
             "albumId": album_id,
             "pageToken": page_token,
             "pageSize": 100,
         });
         let response: SearchResult<MediaItem> =
             ureq::post("https://photoslibrary.googleapis.com/v1/mediaItems:search")
-                .set("Authorization", format!("Bearer {}", access_token).as_str())
-                .set("Content-Type", "Content-type: application/json")
+                .header("Authorization", format!("Bearer {}", access_token).as_str())
+                .header("Content-Type", "application/json")
                 .send_json(&body)?
-                .into_json()?;
+                .into_body()
+                .read_json()?;
         for media_item in response.result {
             match media_item.mimeType.as_str() {
                 "image/jpeg" | "image/png" | "image/bmp" | "image/gif" => {
@@ -246,15 +245,18 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
         true => format!("{}=w600-h448-d", media_item.baseUrl),
         false => format!("{}=w300-h448-d", media_item.baseUrl),
     };
-    let response = ureq::get(&path).call()?;
+    let mut response = ureq::get(&path).call()?;
 
     let dimage = match response
-        .header("Content-Length")
+        .headers()
+        .get("Content-Length")
+        .and_then(|s| s.to_str().ok())
         .and_then(|s| s.parse::<usize>().ok())
         .map(|d| {
             let mut buf: Vec<u8> = Vec::with_capacity(d);
             response
-                .into_reader()
+                .body_mut()
+                .as_reader()
                 .take(10_000_000)
                 .read_to_end(&mut buf)
                 .ok();
@@ -282,11 +284,12 @@ pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std
     loop {
         let response: SearchResult<PhotoAlbum> =
             ureq::get("https://photoslibrary.googleapis.com/v1/albums")
-                .set("Authorization", format!("Bearer {}", access_token).as_str())
-                .set("Content-Type", "Content-type: application/json")
+                .header("Authorization", format!("Bearer {}", access_token).as_str())
+                .header("Content-Type", "application/json")
                 .query_pairs(vec![("pageToken", page_token.as_str())])
                 .call()?
-                .into_json()?;
+                .into_body()
+                .read_json()?;
         for album in response.result {
             album_list.push(album);
         }
