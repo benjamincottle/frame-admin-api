@@ -302,8 +302,6 @@ pub fn get_photo_from_baseurl(
     download_image(&path, access_token)
 }
 
-
-
 pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std::error::Error>> {
     let mut album_list = Vec::new();
     let mut page_token = "".to_string();

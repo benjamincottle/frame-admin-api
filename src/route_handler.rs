@@ -998,7 +998,8 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
     };
 
     let rows = match dbclient.query(
-        "SELECT item_id, ts, portrait FROM album ORDER BY ts DESC LIMIT $1 OFFSET $2",
+        // Use stable ordering to avoid duplicates across pages when timestamps are equal.
+        "SELECT item_id, ts, portrait FROM album ORDER BY ts DESC, item_id DESC LIMIT $1 OFFSET $2",
         &[&page_size, &offset],
     ) {
         Ok(r) => r,
@@ -1187,7 +1188,7 @@ fn handle_image(
     {
         Some(data) => data,
         None => {
-            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            serve_error(request, tiny_http::StatusCode(404), "Not found");
             return Ok(());
         }
     };

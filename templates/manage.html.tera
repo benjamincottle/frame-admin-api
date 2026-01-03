@@ -5,9 +5,6 @@
   {{ super() }}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.js" referrerpolicy="no-referrer"></script>
   <style>
-    #session-response {
-      margin-top: 20px;
-    }
     .pickerLink {
       display: block;
       margin-bottom: 10px;
@@ -30,6 +27,10 @@
       border-radius: 4px;
       cursor: pointer;
     }
+    #create-session-btn,
+    #remove-selected-btn {
+      margin-bottom: 12px;
+    }
     button:hover {
       background-color: #1669c1;
     }
@@ -37,6 +38,42 @@
       margin: 32px auto;
       max-width: 1200px;
       padding: 0 16px;
+    }
+    #session-modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 1000;
+    }
+    #session-modal[aria-hidden="false"] {
+      display: flex;
+    }
+    #session-modal .modal-card {
+      background: var(--background-colour);
+      border-radius: 8px;
+      padding: 20px;
+      max-width: 520px;
+      width: min(90vw, 520px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+    }
+    #session-modal .modal-card h2 {
+      margin: 0 0 12px 0;
+      font-size: 20px;
+    }
+    #session-modal .modal-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    #remove-selected-btn {
+      display: none;
+      background-color: #c62828;
+    }
+    #remove-selected-btn:hover {
+      background-color: #a71f1f;
     }
     #album-grid {
       display: grid;
@@ -51,6 +88,28 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.15s ease, transform 0.15s ease;
+    }
+    .album-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      opacity: 0;
+      transition: opacity 0.15s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .album-card:hover,
+    .album-card.selected {
+      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+      transform: translateY(-1px);
+    }
+    .album-card:hover::after,
+    .album-card.selected::after {
+      opacity: 1;
     }
     .album-card img {
       width: 100%;
@@ -58,6 +117,21 @@
       object-fit: cover;
       border-radius: 4px;
       background: #ddd;
+    }
+    .album-select-checkbox {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: none;
+      z-index: 2;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #1a73e8;
+    }
+    .album-card:hover .album-select-checkbox,
+    .album-card.selected .album-select-checkbox {
+      display: block;
     }
     .album-card .meta { font-size: 12px; color: #555; }
     #album-pagination { margin-top: 24px; display: flex; gap: 8px; align-items: center; }
@@ -69,7 +143,7 @@
   <h1>Manage</h1>
 
   <button id="create-session-btn">Add photos</button>
-  <div id="session-response"></div>
+  <button id="remove-selected-btn">Remove selected images</button>
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
@@ -79,14 +153,38 @@
   </div>
   <div id="album-error" aria-live="polite"></div>
 </div>
+<div id="session-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="session-modal-title">
+  <div class="modal-card">
+    <h2 id="session-modal-title">Add photos</h2>
+    <div id="session-modal-body" class="modal-body"></div>
+  </div>
+</div>
 
 {% endblock content %}
 {% block scripts %}
 <script>
+  const addBtn = document.getElementById("create-session-btn");
+  const removeBtn = document.getElementById("remove-selected-btn");
+  const sessionModal = document.getElementById("session-modal");
+  const sessionModalBody = document.getElementById("session-modal-body");
+  let addButtonLocked = false;
+  let updateSelectionButtons = function() {};
+
+  function openSessionModal(initialMessage) {
+    sessionModalBody.textContent = initialMessage || "";
+    sessionModal.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSessionModal() {
+    sessionModalBody.innerHTML = "";
+    sessionModal.setAttribute("aria-hidden", "true");
+  }
+
   function createPickingSession() {
-    document.getElementById("create-session-btn").style.display = "none";
-    const container = document.getElementById("session-response");
-    container.textContent = "Creating picking session…";
+    addButtonLocked = true;
+    addBtn.style.display = "none";
+    openSessionModal("Creating picking session…");
+    const container = sessionModalBody;
     let pollInterval;
     let syncPollTimeout;
     fetch("/frame_admin/manage", {
@@ -135,11 +233,13 @@
             })
             .then(response => response.text())
             .then(text => {
-              document.getElementById("create-session-btn").style.display = "block";
+              addButtonLocked = false;
+              updateSelectionButtons();
               if (text === "{}") {
                 text = "";
               }
               container.innerHTML = text;
+              closeSessionModal();
             })
         });
         container.appendChild(deleteButton);
@@ -171,7 +271,8 @@
                 syncingMessage.id = "sync-status";
                 syncingMessage.textContent = "Syncing new photos…";
                 container.appendChild(syncingMessage);
-                document.getElementById("create-session-btn").style.display = "block";
+                addButtonLocked = false;
+                updateSelectionButtons();
                 const SYNC_POLL_INTERVAL = 1500;
                 function pollSyncProgress() {
                   fetch("/frame_admin/sync_progress")
@@ -184,7 +285,7 @@
                       if (total_steps === 0) {
                         const statusEl = document.getElementById("sync-status");
                         if (statusEl) statusEl.textContent = "No sync needed.";
-                        loadAlbum(1);
+                        loadAlbum(1, { onComplete: closeSessionModal });
                         return;
                       }
                       const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
@@ -198,7 +299,7 @@
                         if (statusEl && failed_count === 0) {
                           statusEl.textContent = "Sync complete. Refreshing album…";
                         }
-                        loadAlbum(1);
+                        loadAlbum(1, { onComplete: closeSessionModal });
                         return;
                       }
                       syncPollTimeout = setTimeout(pollSyncProgress, SYNC_POLL_INTERVAL);
@@ -215,7 +316,12 @@
                 const timeoutMessage = document.createElement("div");
                 timeoutMessage.textContent = "Polling timed out. Please try again.";
                 container.appendChild(timeoutMessage);
-                document.getElementById("create-session-btn").style.display = "block";
+                addButtonLocked = false;
+                updateSelectionButtons();
+                const closeBtn = document.createElement("button");
+                closeBtn.textContent = "Close";
+                closeBtn.addEventListener("click", closeSessionModal);
+                container.appendChild(closeBtn);
               } else {
                 // Adjust polling interval if changed
                 if (updateData.pollingConfig && updateData.pollingConfig.pollInterval) {
@@ -236,21 +342,73 @@
       })
       .catch(error => {
         console.error("Error:", error);
-        document.getElementById("create-session-btn").style.display = "block";
+        addButtonLocked = false;
+        updateSelectionButtons();
+        closeSessionModal();
       });
   };
 
-  document.getElementById("create-session-btn").addEventListener("click", createPickingSession);
+  addBtn.addEventListener("click", createPickingSession);
 
   (function() {
-    const PAGE_SIZE = 24;
+    const PAGE_SIZE = 12;
     let currentPage = 1;
     let totalPages = 1;
+    const STORAGE_KEY = "frame-admin-album-selected";
     const grid = document.getElementById("album-grid");
     const pageInfo = document.getElementById("album-page-info");
     const prevBtn = document.getElementById("album-prev");
     const nextBtn = document.getElementById("album-next");
     const errorBox = document.getElementById("album-error");
+
+    function loadSelections() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) return new Set(JSON.parse(raw));
+      } catch (e) {
+        console.warn("Could not load selections", e);
+      }
+      return new Set();
+    }
+
+    function persistSelections(selected) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(selected)));
+      } catch (e) {
+        console.warn("Could not store selections", e);
+      }
+    }
+
+    const selectedIds = loadSelections();
+
+    updateSelectionButtons = function() {
+      if (selectedIds.size) {
+        removeBtn.style.display = "inline-block";
+        addBtn.style.display = "none";
+      } else {
+        removeBtn.style.display = "none";
+        addBtn.style.display = addButtonLocked ? "none" : "inline-block";
+      }
+    };
+    updateSelectionButtons();
+
+    function applyCardSelection(card, isSelected) {
+      card.classList.toggle("selected", isSelected);
+      const checkbox = card.querySelector(".album-select-checkbox");
+      if (checkbox) checkbox.checked = isSelected;
+    }
+
+    function toggleSelection(itemId, cardEl) {
+      const isSelected = selectedIds.has(itemId);
+      if (isSelected) {
+        selectedIds.delete(itemId);
+      } else {
+        selectedIds.add(itemId);
+      }
+      applyCardSelection(cardEl, !isSelected);
+      persistSelections(selectedIds);
+      updateSelectionButtons();
+    }
 
     function setLoading(isLoading) {
       if (isLoading) {
@@ -270,6 +428,18 @@
         items.forEach(item => {
           const card = document.createElement("div");
           card.className = "album-card";
+          card.dataset.id = item.id;
+
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.className = "album-select-checkbox";
+          checkbox.title = "Select photo";
+          checkbox.addEventListener("click", (event) => {
+            event.stopPropagation();
+            toggleSelection(item.id, card);
+          });
+          card.appendChild(checkbox);
+
           const img = document.createElement("img");
           img.src = item.thumbUrl;
           img.alt = "Photo thumbnail";
@@ -288,15 +458,28 @@
             link.style.fontSize = "12px";
             card.appendChild(link);
           }
+
+          const isSelected = selectedIds.has(item.id);
+          if (isSelected) {
+            applyCardSelection(card, true);
+          }
+
+          card.addEventListener("click", (event) => {
+            if (event.target.closest("a")) return;
+            toggleSelection(item.id, card);
+          });
+
           grid.appendChild(card);
         });
       }
       pageInfo.textContent = `Page ${page} of ${pages}`;
       prevBtn.disabled = page <= 1;
       nextBtn.disabled = page >= pages;
+      updateSelectionButtons();
     }
 
-    function loadAlbum(page) {
+    function loadAlbum(page, opts = {}) {
+      const { onComplete } = opts;
       setLoading(true);
       fetch(`/frame_admin/album_data?page=${page}&pageSize=${PAGE_SIZE}`)
         .then(res => {
@@ -310,6 +493,9 @@
           console.error("Album load error:", err);
           errorBox.textContent = "Failed to load album.";
           grid.innerHTML = "";
+        })
+        .finally(() => {
+          if (typeof onComplete === "function") onComplete();
         });
     }
 
@@ -318,6 +504,11 @@
     });
     nextBtn.addEventListener("click", () => {
       if (currentPage < totalPages) loadAlbum(currentPage + 1);
+    });
+    removeBtn.addEventListener("click", () => {
+      if (!selectedIds.size) return;
+      const payload = { photos: Array.from(selectedIds) };
+      console.log("Remove selected images payload:", payload);
     });
 
     document.addEventListener("DOMContentLoaded", () => {
