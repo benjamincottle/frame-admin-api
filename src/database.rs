@@ -29,12 +29,10 @@ impl CONNECTION_POOL {
         let mut pool = self.lock().unwrap();
         match pool.pop_front() {
             Some(client) => Ok(client),
-            None => {
-                Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "connection pool is exhausted",
-                ))
-            }
+            None => Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "connection pool is exhausted",
+            )),
         }
     }
 

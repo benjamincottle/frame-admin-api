@@ -73,8 +73,8 @@ fn make_url_for(urls: BTreeMap<String, String>) -> impl Function {
                     Ok(v) => {
                         // log::info!("(make_url_for) looking for name: {}", v);
                         Ok(tera::to_value(urls.get(&v).expect("assert key exists"))
-                        .expect("couldn't convert value to tera::Value"))
-                    },
+                            .expect("couldn't convert value to tera::Value"))
+                    }
                     Err(e) => Err(format!("(make_url_for) no match for name: {}", e).into()),
                 },
                 None => Err("(make_url_for) no value for name".into()),

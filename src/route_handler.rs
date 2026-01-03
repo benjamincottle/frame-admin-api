@@ -1,26 +1,24 @@
 use chrono::{Duration, Utc};
-use serde::{de, Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de};
 use serde_json;
 
 use crate::{
     database::CONNECTION_POOL,
-    google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
+    google_oauth::{AuthGuard, ValidUser, refresh_token, request_token, revoke_token},
     // gphotos_api::{
     //     get_album_list, get_mediaitems, get_photo, MediaItem, MediaMetadata, PickedMediaItem,
     //     PickingSession,
     // },
-    gphotos_api::{
-        get_photo, MediaItem, MediaMetadata, PickedMediaItem, PickingSession
-    },
+    gphotos_api::{MediaItem, MediaMetadata, PickedMediaItem, PickingSession, get_photo},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
-    session_mgr::{SessionID, SESSION_MGR},
-    task_mgr::{Action, Status, Task, TaskData, TaskQueue, TASK_BOARD},
+    session_mgr::{SESSION_MGR, SessionID},
+    task_mgr::{Action, Status, TASK_BOARD, Task, TaskData, TaskQueue},
     template_mgr::TEMPLATES,
 };
 
 use image::imageops::FilterType;
-use jsonwebtoken::{encode, EncodingKey, Header as JWTHeader};
+use jsonwebtoken::{EncodingKey, Header as JWTHeader, encode};
 use route_recognizer::{Params, Router};
 use std::{
     cmp::min,
@@ -234,7 +232,10 @@ fn handle_oauth_authorise(app_data: AppState, request: Request) {
         .append_pair("client_id", google_oauth_client_id)
         .append_pair("redirect_uri", google_oauth_redirect_url)
         .append_pair("response_type", "code")
-        .append_pair("scope", "openid profile email https://www.googleapis.com/auth/photospicker.mediaitems.readonly")
+        .append_pair(
+            "scope",
+            "openid profile email https://www.googleapis.com/auth/photospicker.mediaitems.readonly",
+        )
         .append_pair("access_type", "offline")
         // .append_pair("prompt", "consent") // This causes the user to be asked to re-authorise every time, and ensures a refresh token is returned
         .append_pair("state", &state);
@@ -691,12 +692,19 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
         }
     };
 
-    if let Some(header) = request.headers().iter().find(|h| h.field.equiv("manage-action")) {
+    if let Some(header) = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("manage-action"))
+    {
         match header.value.as_str() {
             "delete" => {
                 let mut body = String::new();
                 if let Err(e) = request.as_reader().read_to_string(&mut body) {
-                    log::error!("(handle_manage) failed to read delete request body: {:?}", e);
+                    log::error!(
+                        "(handle_manage) failed to read delete request body: {:?}",
+                        e
+                    );
                     serve_error(request, tiny_http::StatusCode(400), "Invalid request body");
                     return;
                 }
@@ -742,45 +750,50 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                 let threads = min(task_count, 4);
                 for _ in 0..threads {
                     let queue = queue.clone();
-                    thread::spawn(move || loop {
-                        if queue.is_empty() {
-                            log::info!("(handle_manage) delete queue is empty, nothing to do");
-                            break;
-                        }
-                        let task = queue.pop();
-                        TASK_BOARD.set_board_data(task.id, Status::InProgress);
-                        let mut dbclient = match CONNECTION_POOL.get_client() {
-                            Ok(dbclient) => dbclient,
-                            Err(err) => {
-                                log::error!("(handle_manage) delete: {err}");
-                                TASK_BOARD.set_board_data(task.id, Status::Failed);
-                                continue;
+                    thread::spawn(move || {
+                        loop {
+                            if queue.is_empty() {
+                                log::info!("(handle_manage) delete queue is empty, nothing to do");
+                                break;
                             }
-                        };
-                        let mut success = true;
-                        match task.data {
-                            TaskData::String(item_id) => {
-                                if let Err(err) =
-                                    dbclient.execute("DELETE FROM album WHERE item_id = $1", &[&item_id])
-                                {
+                            let task = queue.pop();
+                            TASK_BOARD.set_board_data(task.id, Status::InProgress);
+                            let mut dbclient = match CONNECTION_POOL.get_client() {
+                                Ok(dbclient) => dbclient,
+                                Err(err) => {
+                                    log::error!("(handle_manage) delete: {err}");
+                                    TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                    continue;
+                                }
+                            };
+                            let mut success = true;
+                            match task.data {
+                                TaskData::String(item_id) => {
+                                    if let Err(err) = dbclient.execute(
+                                        "DELETE FROM album WHERE item_id = $1",
+                                        &[&item_id],
+                                    ) {
+                                        log::error!(
+                                            "(handle_manage) db delete error for {}: {:?}",
+                                            item_id,
+                                            err
+                                        );
+                                        TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                        success = false;
+                                    }
+                                }
+                                _ => {
                                     log::error!(
-                                        "(handle_manage) db delete error for {}: {:?}",
-                                        item_id,
-                                        err
+                                        "(handle_manage) unexpected task data in delete flow"
                                     );
                                     TASK_BOARD.set_board_data(task.id, Status::Failed);
                                     success = false;
                                 }
                             }
-                            _ => {
-                                log::error!("(handle_manage) unexpected task data in delete flow");
-                                TASK_BOARD.set_board_data(task.id, Status::Failed);
-                                success = false;
+                            CONNECTION_POOL.release_client(dbclient);
+                            if success {
+                                TASK_BOARD.set_board_data(task.id, Status::Completed);
                             }
-                        }
-                        CONNECTION_POOL.release_client(dbclient);
-                        if success {
-                            TASK_BOARD.set_board_data(task.id, Status::Completed);
                         }
                     });
                 }
@@ -789,7 +802,8 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                     threads,
                     task_count
                 );
-                let body = match serde_json::to_string(&serde_json::json!({ "queued": task_count })) {
+                let body = match serde_json::to_string(&serde_json::json!({ "queued": task_count }))
+                {
                     Ok(b) => b,
                     Err(e) => {
                         log::error!("(handle_manage) serialize error: {:?}", e);
@@ -813,13 +827,20 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
         }
     }
 
-    if let Some(header) = request.headers().iter().find(|h| h.field.equiv("picker-session")) {
+    if let Some(header) = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("picker-session"))
+    {
         let value = header.value.as_str();
         let mut parts = value.splitn(2, ':');
         let action = parts.next().unwrap_or("");
         let session_id = parts.next();
 
-        fn respond_json<T: serde::Serialize>(request: Request, result: Result<T, impl std::fmt::Debug>) {
+        fn respond_json<T: serde::Serialize>(
+            request: Request,
+            result: Result<T, impl std::fmt::Debug>,
+        ) {
             let json = serde_json::json!(result.expect("API call failed"));
             let body = serde_json::to_string(&json).expect("can't serialize response");
             let response = Response::empty(tiny_http::StatusCode(200))
@@ -833,22 +854,40 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
 
         match action {
             "create" => {
-                respond_json(request, PickingSession::create(&auth_guard.user.credentials.access_token));
+                respond_json(
+                    request,
+                    PickingSession::create(&auth_guard.user.credentials.access_token),
+                );
             }
             "delete" => {
                 if let Some(session_id) = session_id {
                     let session_id = session_id.to_string();
-                    respond_json(request, PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id));
+                    respond_json(
+                        request,
+                        PickingSession::delete(
+                            &auth_guard.user.credentials.access_token,
+                            &session_id,
+                        ),
+                    );
                 }
             }
             "poll" => {
                 if let Some(session_id) = session_id {
                     let session_id = session_id.to_string();
-                    let result = PickingSession::poll(&auth_guard.user.credentials.access_token, &session_id);
+                    let result = PickingSession::poll(
+                        &auth_guard.user.credentials.access_token,
+                        &session_id,
+                    );
                     if let Ok(ref poll_response) = result {
                         if poll_response.mediaItemsSet {
-                            log::info!("Media items have been set for picking session {}", session_id);
-                            let list = PickingSession::list_picked(&auth_guard.user.credentials.access_token, &session_id);
+                            log::info!(
+                                "Media items have been set for picking session {}",
+                                session_id
+                            );
+                            let list = PickingSession::list_picked(
+                                &auth_guard.user.credentials.access_token,
+                                &session_id,
+                            );
                             if let Ok(ref media_items) = list {
                                 log::info!("Media items picked: {:?}", media_items);
                                 let picked_map: HashMap<String, PickedMediaItem> = media_items
@@ -863,14 +902,12 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                         session_id
                                     );
                                 } else {
-                                    let access_token = auth_guard.user.credentials.access_token.clone();
+                                    let access_token =
+                                        auth_guard.user.credentials.access_token.clone();
                                     let mut dbclient = match CONNECTION_POOL.get_client() {
                                         Ok(c) => c,
                                         Err(e) => {
-                                            log::error!(
-                                                "(handle_manage) DB pool error: {:?}",
-                                                e
-                                            );
+                                            log::error!("(handle_manage) DB pool error: {:?}", e);
                                             respond_json(request, result);
                                             return;
                                         }
@@ -884,10 +921,7 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                             }
                                         }
                                         Err(e) => {
-                                            log::error!(
-                                                "(handle_manage) DB query error: {:?}",
-                                                e
-                                            );
+                                            log::error!("(handle_manage) DB query error: {:?}", e);
                                             CONNECTION_POOL.release_client(dbclient);
                                             respond_json(request, result);
                                             return;
@@ -906,12 +940,16 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                         let queue = Arc::new(TaskQueue::new());
                                         let mut task_count = 0;
                                         for media_item_id in new_ids.iter() {
-                                            if let Some(picked_item) = picked_map.get(media_item_id) {
+                                            if let Some(picked_item) = picked_map.get(media_item_id)
+                                            {
                                                 let media_item = picked_to_media_item(picked_item);
                                                 queue.push(Task {
                                                     id: TASK_BOARD.add_task(Action::Add),
                                                     action: Action::Add,
-                                                    data: TaskData::MediaItemWithToken(media_item, access_token.clone()),
+                                                    data: TaskData::MediaItemWithToken(
+                                                        media_item,
+                                                        access_token.clone(),
+                                                    ),
                                                     status: Status::Pending,
                                                 });
                                                 task_count += 1;
@@ -931,26 +969,40 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                             let threads = min(task_count, 4);
                                             for _ in 0..threads {
                                                 let queue = queue.clone();
-                                                thread::spawn(move || loop {
-                                                    if queue.is_empty() {
-                                                        log::info!("(handle_manage) queue is empty, nothing to do");
-                                                        break;
-                                                    }
-                                                    let task = queue.pop();
-                                                    TASK_BOARD.set_board_data(task.id, Status::InProgress);
-                                                    let mut dbclient = match CONNECTION_POOL.get_client() {
-                                                        Ok(dbclient) => dbclient,
-                                                        Err(err) => {
-                                                            log::error!("(handle_manage): {err}");
-                                                            TASK_BOARD.set_board_data(task.id, Status::Failed);
-                                                            continue;
+                                                thread::spawn(move || {
+                                                    loop {
+                                                        if queue.is_empty() {
+                                                            log::info!(
+                                                                "(handle_manage) queue is empty, nothing to do"
+                                                            );
+                                                            break;
                                                         }
-                                                    };
-                                                    let mut success = true;
-                                                    match task.data {
-                                                        TaskData::MediaItem(media_item) => {
-                                                            log::info!("(handle_manage) retrieving photo");
-                                                            match get_photo(&media_item, None)
+                                                        let task = queue.pop();
+                                                        TASK_BOARD.set_board_data(
+                                                            task.id,
+                                                            Status::InProgress,
+                                                        );
+                                                        let mut dbclient =
+                                                            match CONNECTION_POOL.get_client() {
+                                                                Ok(dbclient) => dbclient,
+                                                                Err(err) => {
+                                                                    log::error!(
+                                                                        "(handle_manage): {err}"
+                                                                    );
+                                                                    TASK_BOARD.set_board_data(
+                                                                        task.id,
+                                                                        Status::Failed,
+                                                                    );
+                                                                    continue;
+                                                                }
+                                                            };
+                                                        let mut success = true;
+                                                        match task.data {
+                                                            TaskData::MediaItem(media_item) => {
+                                                                log::info!(
+                                                                    "(handle_manage) retrieving photo"
+                                                                );
+                                                                match get_photo(&media_item, None)
                                                                 .map(|data| {
                                                                     log::info!("(handle_manage) encoding image");
                                                                     encode_image(&data)
@@ -981,10 +1033,15 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                                                     success = false;
                                                                 }
                                                             };
-                                                        }
-                                                        TaskData::MediaItemWithToken(media_item, token) => {
-                                                            log::info!("(handle_manage) retrieving photo");
-                                                            match get_photo(&media_item, Some(token.as_str()))
+                                                            }
+                                                            TaskData::MediaItemWithToken(
+                                                                media_item,
+                                                                token,
+                                                            ) => {
+                                                                log::info!(
+                                                                    "(handle_manage) retrieving photo"
+                                                                );
+                                                                match get_photo(&media_item, Some(token.as_str()))
                                                                 .map(|data| {
                                                                     log::info!("(handle_manage) encoding image");
                                                                     encode_image(&data)
@@ -1015,16 +1072,25 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                                                     success = false;
                                                                 }
                                                             };
+                                                            }
+                                                            TaskData::String(_) => {
+                                                                log::error!(
+                                                                    "(handle_manage) unexpected remove task in manage flow"
+                                                                );
+                                                                TASK_BOARD.set_board_data(
+                                                                    task.id,
+                                                                    Status::Failed,
+                                                                );
+                                                                success = false;
+                                                            }
                                                         }
-                                                        TaskData::String(_) => {
-                                                            log::error!("(handle_manage) unexpected remove task in manage flow");
-                                                            TASK_BOARD.set_board_data(task.id, Status::Failed);
-                                                            success = false;
+                                                        CONNECTION_POOL.release_client(dbclient);
+                                                        if success {
+                                                            TASK_BOARD.set_board_data(
+                                                                task.id,
+                                                                Status::Completed,
+                                                            );
                                                         }
-                                                    }
-                                                    CONNECTION_POOL.release_client(dbclient);
-                                                    if success {
-                                                        TASK_BOARD.set_board_data(task.id, Status::Completed);
                                                     }
                                                 });
                                             }
@@ -1041,14 +1107,21 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                             }
 
                             log::info!("Media items set, deleting picking session {}", session_id);
-                            let _ = PickingSession::delete(&auth_guard.user.credentials.access_token, &session_id);
+                            let _ = PickingSession::delete(
+                                &auth_guard.user.credentials.access_token,
+                                &session_id,
+                            );
                         }
                     }
                     respond_json(request, result);
                 }
             }
             _ => {
-                serve_error(request, tiny_http::StatusCode(400), "Invalid picker-session action");
+                serve_error(
+                    request,
+                    tiny_http::StatusCode(400),
+                    "Invalid picker-session action",
+                );
             }
         }
         return;
@@ -1109,8 +1182,17 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
     };
 
     let params = extract_params(request.url());
-    let page: i64 = params.get("page").and_then(|v| v.parse().ok()).filter(|p| *p > 0).unwrap_or(1);
-    let page_size: i64 = params.get("pageSize").and_then(|v| v.parse::<i64>().ok()).filter(|s| *s > 0).map(|s| s.min(24)).unwrap_or(12);
+    let page: i64 = params
+        .get("page")
+        .and_then(|v| v.parse().ok())
+        .filter(|p| *p > 0)
+        .unwrap_or(1);
+    let page_size: i64 = params
+        .get("pageSize")
+        .and_then(|v| v.parse::<i64>().ok())
+        .filter(|s| *s > 0)
+        .map(|s| s.min(24))
+        .unwrap_or(12);
     let offset = (page - 1) * page_size;
 
     let mut dbclient = match CONNECTION_POOL.get_client() {
@@ -1150,8 +1232,8 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
         let id: String = row.get(0);
         let ts_secs: i64 = row.get(1);
         let portrait: bool = row.get(2);
-        let ts_iso = chrono::DateTime::<chrono::Utc>::from_timestamp(ts_secs, 0)
-            .map(|dt| dt.to_rfc3339());
+        let ts_iso =
+            chrono::DateTime::<chrono::Utc>::from_timestamp(ts_secs, 0).map(|dt| dt.to_rfc3339());
         items.push(serde_json::json!({
             "id": id,
             "thumbUrl": format!("/frame_admin/image/{}?size=thumb", id),
@@ -1320,8 +1402,8 @@ fn handle_image(
     CONNECTION_POOL.release_client(dbclient);
     let (nwidth, nheight) = if is_thumb {
         match data.len() {
-            134400 => (120, 90),  // landscape thumbnail
-            67200 => (90, 120),   // portrait thumbnail
+            134400 => (120, 90), // landscape thumbnail
+            67200 => (90, 120),  // portrait thumbnail
             _ => unreachable!(),
         }
     } else {

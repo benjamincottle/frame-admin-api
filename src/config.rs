@@ -1,6 +1,6 @@
-use rand::{distr::Alphanumeric, Rng};
-use serde_json;
+use rand::{Rng, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::{env, fs::File, io::BufReader, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,8 +20,7 @@ impl Config {
         match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let config =
-                    serde_json::from_reader(reader).expect("couldn't deserialise config");
+                let config = serde_json::from_reader(reader).expect("couldn't deserialise config");
                 log::info!("config initialised");
                 config
             }
@@ -60,9 +59,7 @@ pub fn generate_secret() -> String {
     rand::rng()
         .sample_iter(&Alphanumeric)
         .map(char::from)
-        .filter(|&c| {
-            c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit()
-        })
+        .filter(|&c| c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit())
         .take(64)
         .collect::<String>()
 }

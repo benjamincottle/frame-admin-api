@@ -18,19 +18,11 @@ use crate::{
     template_mgr::TEMPLATES,
 };
 
-use std::{
-    // env,
-    // io::{BufRead, stdin},
-    process::exit,
-    sync::Arc,
-    thread,
-};
+use std::{process::exit, sync::Arc, thread};
 use tiny_http::Server;
 
 fn main() {
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info")
-    ).init();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     #[cfg(debug_assertions)]
     std::panic::set_hook(Box::new(|info| {
         eprintln!("{info}");
@@ -78,24 +70,6 @@ fn main() {
         });
     }
     loop {
-        // This won't work when the system is running in a docker container
-        // but it's useful for debugging when running natively.
-        // let mut input = String::new();
-        // stdin().lock().read_line(&mut input).unwrap();
-        // if input.trim() == "d" {
-        //     TASK_BOARD.dump();
-        // } else if input.trim() == "s" {
-        //     SESSION_MGR.dump();
-        // } else if input.trim() == "r" {
-        //     TEMPLATES.full_reload();
-        // } else if input.trim() == "u" {
-        //     println!("[Debug] Users in AppState");
-        //     println!("[Debug]   Users:");
-        //     let user_db = app_data.db.lock().unwrap();
-        //     for user in user_db.iter() {
-        //         println!("[Debug]      {:?}", user);
-        //     }
-        // }
         thread::park();
     }
 }

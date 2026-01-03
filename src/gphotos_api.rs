@@ -1,10 +1,10 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+use core::str;
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
-use core::str;
-use std::{collections::HashSet, io::Read};
 use serde_json::json;
+use std::{collections::HashSet, io::Read};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PhotoAlbum {
@@ -123,9 +123,7 @@ pub struct PickingSession {
 }
 
 impl PickingSession {
-    pub fn create(
-        access_token: &str,
-    ) -> Result<PickingSession, Box<dyn std::error::Error>> {
+    pub fn create(access_token: &str) -> Result<PickingSession, Box<dyn std::error::Error>> {
         let response = ureq::post("https://photospicker.googleapis.com/v1/sessions")
             .header("Authorization", format!("Bearer {}", access_token).as_str())
             .header("Content-Type", "application/json")
@@ -246,7 +244,10 @@ fn build_download_path(base_url: &str, width: i64, height: i64) -> String {
     }
 }
 
-fn download_image(path: &str, access_token: Option<&str>) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+fn download_image(
+    path: &str,
+    access_token: Option<&str>,
+) -> Result<DynamicImage, Box<dyn std::error::Error>> {
     let mut request = ureq::get(path);
     if let Some(token) = access_token {
         request = request.header("Authorization", format!("Bearer {}", token).as_str());
@@ -276,7 +277,7 @@ fn download_image(path: &str, access_token: Option<&str>) -> Result<DynamicImage
                 std::io::ErrorKind::Other,
                 "(get_photo) Failed to dowload image",
             )
-            .into())
+            .into());
         }
     };
     Ok(dimage)

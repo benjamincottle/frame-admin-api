@@ -1,9 +1,9 @@
 use crate::model::{AppState, TokenClaims, User};
 
 use chrono::Utc;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json;
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
     collections::HashMap,
     error::Error,
@@ -259,7 +259,10 @@ impl ValidUser {
             Ok(token) => {
                 let user_opt = {
                     let user_db = app_data.db.lock().unwrap();
-                    user_db.iter().find(|user| user.id == token.claims.sub).cloned()
+                    user_db
+                        .iter()
+                        .find(|user| user.id == token.claims.sub)
+                        .cloned()
                 };
                 if user_opt.is_none() {
                     log::warn!("user belonging to this token no longer exists");
@@ -286,9 +289,7 @@ impl ValidUser {
                     }
                 }
 
-                Ok(ValidUser {
-                    user,
-                })
+                Ok(ValidUser { user })
             }
             Err(_) => {
                 log::warn!("invalid token or user doesn't exist");

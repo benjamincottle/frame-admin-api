@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -86,14 +86,11 @@ impl SESSION_MGR {
         rand::rng()
             .sample_iter(&Alphanumeric)
             .map(char::from)
-            .filter(|&c| {
-                c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit()
-            })
+            .filter(|&c| c.is_ascii_lowercase() || c.is_ascii_uppercase() || c.is_ascii_digit())
             .take(64)
             .collect::<String>()
     }
 
-    #[allow(dead_code)]
     pub fn dump(&self) {
         let session_mgr = self.lock().unwrap();
         println!("[Debug] Session Manager:");
