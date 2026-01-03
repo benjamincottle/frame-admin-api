@@ -5,7 +5,10 @@ use serde_json;
 use crate::{
     database::CONNECTION_POOL,
     google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
-    gphotos_api::{get_album_list, get_mediaitems, get_photo, MediaItem, PickingSession},
+    gphotos_api::{
+        get_album_list, get_mediaitems, get_photo, MediaItem, MediaMetadata, PickedMediaItem,
+        PickingSession,
+    },
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
     session_mgr::{SessionID, SESSION_MGR},
@@ -70,7 +73,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
     // router.add("/frame_admin/config", "config".to_string());
     // router.add("/frame_admin/sync", "sync".to_string());
-    // router.add("/frame_admin/sync_progress", "sync_progress".to_string());
+    router.add("/frame_admin/sync_progress", "sync_progress".to_string());
     router.add("/frame_admin/monitor", "monitor".to_string());
     router.add("/frame_admin/album_data", "album_data".to_string());
     router.add("/frame_admin/manage", "manage".to_string());
@@ -116,9 +119,9 @@ pub fn route_request(app_data: AppState, request: Request) {
         //         log::error!("(route_request) sync route failed: {}", err);
         //     };
         // }
-        // "sync_progress" => {
-        //     handle_sync_progress(request, auth_guard);
-        // }
+        "sync_progress" => {
+            handle_sync_progress(request, auth_guard);
+        }
         // "tasks" => {
         //     handle_tasks(request, auth_guard);
         // }
@@ -657,6 +660,20 @@ fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<Vali
 //     dispatch_response(request, response);
 // }
 
+fn picked_to_media_item(picked: &PickedMediaItem) -> MediaItem {
+    MediaItem {
+        id: picked.id.clone(),
+        productUrl: picked.mediaFile.baseUrl.clone(),
+        baseUrl: picked.mediaFile.baseUrl.clone(),
+        mimeType: picked.mediaFile.mimeType.clone(),
+        mediaMetadata: MediaMetadata {
+            width: picked.mediaFile.mediaFileMetadata.width.to_string(),
+            height: picked.mediaFile.mediaFileMetadata.height.to_string(),
+        },
+        filename: picked.mediaFile.filename.clone(),
+    }
+}
+
 fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
     let auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
@@ -709,6 +726,191 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
                             let list = PickingSession::list_picked(&auth_guard.user.credentials.access_token, &session_id);
                             if let Ok(ref media_items) = list {
                                 log::info!("Media items picked: {:?}", media_items);
+                                let picked_map: HashMap<String, PickedMediaItem> = media_items
+                                    .iter()
+                                    .map(|item| (item.id.clone(), item.clone()))
+                                    .collect();
+                                let picked_ids: HashSet<String> =
+                                    media_items.iter().map(|item| item.id.clone()).collect();
+                                if picked_ids.is_empty() {
+                                    log::info!(
+                                        "No media items returned for picking session {}, nothing to sync",
+                                        session_id
+                                    );
+                                } else {
+                                    let access_token = auth_guard.user.credentials.access_token.clone();
+                                    let mut dbclient = match CONNECTION_POOL.get_client() {
+                                        Ok(c) => c,
+                                        Err(e) => {
+                                            log::error!(
+                                                "(handle_manage) DB pool error: {:?}",
+                                                e
+                                            );
+                                            respond_json(request, result);
+                                            return;
+                                        }
+                                    };
+                                    let mut existing_ids = HashSet::new();
+                                    match dbclient.query("SELECT item_id FROM album", &[]) {
+                                        Ok(rows) => {
+                                            for row in rows {
+                                                let media_item_id: String = row.get(0);
+                                                existing_ids.insert(media_item_id);
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::error!(
+                                                "(handle_manage) DB query error: {:?}",
+                                                e
+                                            );
+                                            CONNECTION_POOL.release_client(dbclient);
+                                            respond_json(request, result);
+                                            return;
+                                        }
+                                    }
+                                    CONNECTION_POOL.release_client(dbclient);
+                                    let new_ids: HashSet<_> =
+                                        picked_ids.difference(&existing_ids).cloned().collect();
+                                    if new_ids.is_empty() {
+                                        log::info!(
+                                            "All {} picked items already exist, skipping sync",
+                                            picked_ids.len()
+                                        );
+                                    } else {
+                                        TASK_BOARD.reset();
+                                        let queue = Arc::new(TaskQueue::new());
+                                        let mut task_count = 0;
+                                        for media_item_id in new_ids.iter() {
+                                            if let Some(picked_item) = picked_map.get(media_item_id) {
+                                                let media_item = picked_to_media_item(picked_item);
+                                                queue.push(Task {
+                                                    id: TASK_BOARD.add_task(Action::Add),
+                                                    action: Action::Add,
+                                                    data: TaskData::MediaItemWithToken(media_item, access_token.clone()),
+                                                    status: Status::Pending,
+                                                });
+                                                task_count += 1;
+                                            } else {
+                                                log::warn!(
+                                                    "(handle_manage) picked item {} not found in map after filtering",
+                                                    media_item_id
+                                                );
+                                            }
+                                        }
+                                        if task_count == 0 {
+                                            log::info!(
+                                                "No tasks enqueued after filtering picked items for session {}",
+                                                session_id
+                                            );
+                                        } else {
+                                            let threads = min(task_count, 4);
+                                            for _ in 0..threads {
+                                                let queue = queue.clone();
+                                                thread::spawn(move || loop {
+                                                    if queue.is_empty() {
+                                                        log::info!("(handle_manage) queue is empty, nothing to do");
+                                                        break;
+                                                    }
+                                                    let task = queue.pop();
+                                                    TASK_BOARD.set_board_data(task.id, Status::InProgress);
+                                                    let mut dbclient = match CONNECTION_POOL.get_client() {
+                                                        Ok(dbclient) => dbclient,
+                                                        Err(err) => {
+                                                            log::error!("(handle_manage): {err}");
+                                                            TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                                            continue;
+                                                        }
+                                                    };
+                                                    let mut success = true;
+                                                    match task.data {
+                                                        TaskData::MediaItem(media_item) => {
+                                                            log::info!("(handle_manage) retrieving photo");
+                                                            match get_photo(&media_item, None)
+                                                                .map(|data| {
+                                                                    log::info!("(handle_manage) encoding image");
+                                                                    encode_image(&data)
+                                                                })
+                                                                .and_then(|data| {
+                                                                    log::info!("(handle_manage) adding media item to db");
+                                                                    let portrait = media_item.mediaMetadata.width.parse::<i64>()?
+                                                                        < media_item.mediaMetadata.height.parse::<i64>()?;
+                                                                    dbclient.execute(
+                                                                        "INSERT INTO album (item_id, ts, portrait, data) VALUES ($1, $2, $3, $4)",
+                                                                        &[
+                                                                            &media_item.id,
+                                                                            &0_i64,
+                                                                            &portrait,
+                                                                            &data,
+                                                                        ],
+                                                                    )?;
+                                                                    Ok(())
+                                                                }) {
+                                                                Ok(_) => {}
+                                                                Err(err) => {
+                                                                    log::error!(
+                                                                        "(handle_manage) db insert error for {}: {:?}",
+                                                                        media_item.id,
+                                                                        err
+                                                                    );
+                                                                    TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                                                    success = false;
+                                                                }
+                                                            };
+                                                        }
+                                                        TaskData::MediaItemWithToken(media_item, token) => {
+                                                            log::info!("(handle_manage) retrieving photo");
+                                                            match get_photo(&media_item, Some(token.as_str()))
+                                                                .map(|data| {
+                                                                    log::info!("(handle_manage) encoding image");
+                                                                    encode_image(&data)
+                                                                })
+                                                                .and_then(|data| {
+                                                                    log::info!("(handle_manage) adding media item to db");
+                                                                    let portrait = media_item.mediaMetadata.width.parse::<i64>()?
+                                                                        < media_item.mediaMetadata.height.parse::<i64>()?;
+                                                                    dbclient.execute(
+                                                                        "INSERT INTO album (item_id, ts, portrait, data) VALUES ($1, $2, $3, $4)",
+                                                                        &[
+                                                                            &media_item.id,
+                                                                            &0_i64,
+                                                                            &portrait,
+                                                                            &data,
+                                                                        ],
+                                                                    )?;
+                                                                    Ok(())
+                                                                }) {
+                                                                Ok(_) => {}
+                                                                Err(err) => {
+                                                                    log::error!(
+                                                                        "(handle_manage) db insert error for {}: {:?}",
+                                                                        media_item.id,
+                                                                        err
+                                                                    );
+                                                                    TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                                                    success = false;
+                                                                }
+                                                            };
+                                                        }
+                                                        TaskData::String(_) => {
+                                                            log::error!("(handle_manage) unexpected remove task in manage flow");
+                                                            TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                                            success = false;
+                                                        }
+                                                    }
+                                                    CONNECTION_POOL.release_client(dbclient);
+                                                    if success {
+                                                        TASK_BOARD.set_board_data(task.id, Status::Completed);
+                                                    }
+                                                });
+                                            }
+                                            log::info!(
+                                                "(handle_manage) dispatched {} sync thread(s) for {} new items",
+                                                threads,
+                                                task_count
+                                            );
+                                        }
+                                    }
+                                }
                             } else {
                                 log::error!("Error listing picked media items: {:?}", list.err());
                             }
@@ -731,6 +933,39 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
     context.insert("profile", &auth_guard.user.photo);
     let rendered = TEMPLATES.render("manage.html.tera", &context);
     let response = Response::from_data(rendered);
+    dispatch_response(request, response);
+}
+
+fn handle_sync_progress(request: Request, auth_guard: AuthGuard<ValidUser>) {
+    match auth_guard {
+        Ok(_) => {}
+        Err(_) => {
+            serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
+            return;
+        }
+    };
+    let body = match TASK_BOARD.board_status() {
+        Ok(status) => match serde_json::to_string(&status) {
+            Ok(b) => b,
+            Err(e) => {
+                log::error!("(handle_sync_progress) serialize error: {:?}", e);
+                serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+                return;
+            }
+        },
+        Err(e) => {
+            log::error!("(handle_sync_progress) can't get board status: {}", e);
+            serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+            return;
+        }
+    };
+    let rendered = body.as_bytes();
+    let response = Response::empty(tiny_http::StatusCode(200))
+        .with_data(rendered, Some(rendered.len()))
+        .with_header(
+            tiny_http::Header::from_str("Content-Type: application/json")
+                .expect("This should never fail"),
+        );
     dispatch_response(request, response);
 }
 

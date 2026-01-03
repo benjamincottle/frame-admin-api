@@ -24,15 +24,15 @@ pub struct MediaMetadata {
 pub struct MediaItem {
     pub id: String,
     pub productUrl: String,
-    baseUrl: String,
-    mimeType: String,
+    pub baseUrl: String,
+    pub mimeType: String,
     pub mediaMetadata: MediaMetadata,
-    filename: String,
+    pub filename: String,
 }
 
 // New VV
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum VideoProcessingStatus {
     UNSPECIFIED,
     PROCESSING,
@@ -40,13 +40,13 @@ pub enum VideoProcessingStatus {
     FAILED,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct VideoMetadata {
     pub fps: Option<f64>,
     pub processingStatus: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PhotoMetadata {
     pub focalLength: Option<f64>,
     pub apertureFNumber: Option<f64>,
@@ -54,7 +54,7 @@ pub struct PhotoMetadata {
     pub exposureTime: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MediaFileMetadata {
     pub width: i32,
     pub height: i32,
@@ -64,7 +64,7 @@ pub struct MediaFileMetadata {
     pub videoMetadata: Option<VideoMetadata>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MediaFile {
     pub baseUrl: String,
     pub mimeType: String,
@@ -72,14 +72,14 @@ pub struct MediaFile {
     pub mediaFileMetadata: MediaFileMetadata,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub enum Type {
     TYPE_UNSPECIFIED,
     PHOTO,
     VIDEO,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct PickedMediaItem {
     pub id: String,
     pub createTime: String,
@@ -238,14 +238,20 @@ pub fn get_mediaitems(
     Ok(media_item_list)
 }
 
-pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::error::Error>> {
-    let path = match media_item.mediaMetadata.width.parse::<i64>()?
-        > media_item.mediaMetadata.height.parse::<i64>()?
-    {
-        true => format!("{}=w600-h448-d", media_item.baseUrl),
-        false => format!("{}=w300-h448-d", media_item.baseUrl),
-    };
-    let mut response = ureq::get(&path).call()?;
+fn build_download_path(base_url: &str, width: i64, height: i64) -> String {
+    if width > height {
+        format!("{base_url}=w600-h448-d")
+    } else {
+        format!("{base_url}=w300-h448-d")
+    }
+}
+
+fn download_image(path: &str, access_token: Option<&str>) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+    let mut request = ureq::get(path);
+    if let Some(token) = access_token {
+        request = request.header("Authorization", format!("Bearer {}", token).as_str());
+    }
+    let mut response = request.call()?;
 
     let dimage = match response
         .headers()
@@ -274,6 +280,26 @@ pub fn get_photo(media_item: &MediaItem) -> Result<DynamicImage, Box<dyn std::er
         }
     };
     Ok(dimage)
+}
+
+pub fn get_photo(
+    media_item: &MediaItem,
+    access_token: Option<&str>,
+) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+    let width = media_item.mediaMetadata.width.parse::<i64>()?;
+    let height = media_item.mediaMetadata.height.parse::<i64>()?;
+    let path = build_download_path(&media_item.baseUrl, width, height);
+    download_image(&path, access_token)
+}
+
+pub fn get_photo_from_baseurl(
+    base_url: &str,
+    width: i64,
+    height: i64,
+    access_token: Option<&str>,
+) -> Result<DynamicImage, Box<dyn std::error::Error>> {
+    let path = build_download_path(base_url, width, height);
+    download_image(&path, access_token)
 }
 
 

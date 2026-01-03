@@ -57,7 +57,7 @@ impl Config {
 }
 
 pub fn generate_secret() -> String {
-    rand::thread_rng()
+    rand::rng()
         .sample_iter(&Alphanumeric)
         .map(char::from)
         .filter(|&c| {

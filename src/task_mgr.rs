@@ -122,6 +122,7 @@ pub struct TaskBoardStatus {
 #[derive(Debug)]
 pub enum TaskData {
     MediaItem(MediaItem),
+    MediaItemWithToken(MediaItem, String),
     String(String),
 }
 

@@ -83,7 +83,7 @@ impl SESSION_MGR {
     }
 
     pub fn generate_state(&self) -> String {
-        rand::thread_rng()
+        rand::rng()
             .sample_iter(&Alphanumeric)
             .map(char::from)
             .filter(|&c| {

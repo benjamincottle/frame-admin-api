@@ -33,10 +33,14 @@
     button:hover {
       background-color: #1669c1;
     }
-    #photo-album { margin-top: 24px; }
+    #photo-album {
+      margin: 32px auto;
+      max-width: 1200px;
+      padding: 0 16px;
+    }
     #album-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 12px;
     }
     .album-card {
@@ -50,7 +54,7 @@
     }
     .album-card img {
       width: 100%;
-      height: 120px;
+      height: 140px;
       object-fit: cover;
       border-radius: 4px;
       background: #ddd;
@@ -84,6 +88,7 @@
     const container = document.getElementById("session-response");
     container.textContent = "Creating picking session…";
     let pollInterval;
+    let syncPollTimeout;
     fetch("/frame_admin/manage", {
         method: "GET",
         headers: {
@@ -160,14 +165,51 @@
             .then(updateData => {
               if (updateData.mediaItemsSet) {
                 clearTimeout(pollInterval);
+                if (syncPollTimeout) clearTimeout(syncPollTimeout);
                 container.innerHTML = "";
-                const successMessage = document.createElement("div");
-                successMessage.textContent = "Media items have been set.";
-
-                container.appendChild(successMessage);
-              
+                const syncingMessage = document.createElement("div");
+                syncingMessage.id = "sync-status";
+                syncingMessage.textContent = "Syncing new photos…";
+                container.appendChild(syncingMessage);
                 document.getElementById("create-session-btn").style.display = "block";
-              
+                const SYNC_POLL_INTERVAL = 1500;
+                function pollSyncProgress() {
+                  fetch("/frame_admin/sync_progress")
+                    .then(res => {
+                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                      return res.json();
+                    })
+                    .then(status => {
+                      const { total_steps, current_step, failed_count } = status;
+                      if (total_steps === 0) {
+                        const statusEl = document.getElementById("sync-status");
+                        if (statusEl) statusEl.textContent = "No sync needed.";
+                        loadAlbum(1);
+                        return;
+                      }
+                      const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
+                      const statusEl = document.getElementById("sync-status");
+                      if (statusEl) {
+                        statusEl.textContent = failed_count > 0
+                          ? `Sync completed with ${failed_count} failure(s).`
+                          : `Syncing new photos… ${percent}%`;
+                      }
+                      if (total_steps > 0 && current_step >= total_steps) {
+                        if (statusEl && failed_count === 0) {
+                          statusEl.textContent = "Sync complete. Refreshing album…";
+                        }
+                        loadAlbum(1);
+                        return;
+                      }
+                      syncPollTimeout = setTimeout(pollSyncProgress, SYNC_POLL_INTERVAL);
+                    })
+                    .catch(err => {
+                      console.error("Sync progress error:", err);
+                      syncPollTimeout = setTimeout(pollSyncProgress, SYNC_POLL_INTERVAL * 2);
+                    });
+                }
+                pollSyncProgress();
+
               } else if (updateData.pollingConfig && updateData.pollingConfig.timeoutIn <= 0) {
                 clearTimeout(pollInterval);
                 const timeoutMessage = document.createElement("div");
@@ -281,6 +323,9 @@
     document.addEventListener("DOMContentLoaded", () => {
       loadAlbum(1);
     });
+
+    // Expose for sync refresh
+    window.loadAlbum = loadAlbum;
   })();
 
 </script>
