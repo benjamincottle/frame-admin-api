@@ -5,6 +5,9 @@
   {{ super() }}
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.js" referrerpolicy="no-referrer"></script>
   <style>
+    #title_head {
+      margin-left: 24px;
+    }
     .pickerLink {
       display: block;
       margin-bottom: 10px;
@@ -149,10 +152,13 @@
 {% endblock head %}
 
 {% block content %}
-  <h1>Manage</h1>
+  <div id="title_head">
+    <h1>Manage</h1>
 
-  <button id="create-session-btn">Add photos</button>
-  <button id="remove-selected-btn">Remove selected images</button>
+    <button id="create-session-btn">Add photos</button>
+    <button id="remove-selected-btn">Remove selected images</button>
+  </div>
+
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
@@ -176,26 +182,59 @@
   const removeBtn = document.getElementById("remove-selected-btn");
   const sessionModal = document.getElementById("session-modal");
   const sessionModalBody = document.getElementById("session-modal-body");
+  const sessionModalTitle = document.getElementById("session-modal-title");
   let addButtonLocked = false;
   let updateSelectionButtons = function() {};
+  const SYNC_POLL_INTERVAL = 1500;
 
-  function openSessionModal(initialMessage) {
+  function openSessionModal(initialMessage, titleText) {
+    sessionModalTitle.textContent = titleText || "Add photos";
     sessionModalBody.textContent = initialMessage || "";
     sessionModal.setAttribute("aria-hidden", "false");
   }
 
   function closeSessionModal() {
     sessionModalBody.innerHTML = "";
+    sessionModalTitle.textContent = "Add photos";
     sessionModal.setAttribute("aria-hidden", "true");
+  }
+
+  function pollSyncProgress(options = {}) {
+    const { onUpdate, onComplete } = options;
+    const retryDelay = options.retryDelay || SYNC_POLL_INTERVAL * 2;
+
+    function poll(delayMs) {
+      setTimeout(() => {
+        fetch("/frame_admin/sync_progress")
+          .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then(status => {
+            if (typeof onUpdate === "function") onUpdate(status);
+            const { total_steps, current_step } = status;
+            if (total_steps === 0 || (total_steps > 0 && current_step >= total_steps)) {
+              if (typeof onComplete === "function") onComplete(status);
+              return;
+            }
+            poll(SYNC_POLL_INTERVAL);
+          })
+          .catch(err => {
+            console.error("Sync progress error:", err);
+            poll(retryDelay);
+          });
+      }, delayMs);
+    }
+
+    poll(0);
   }
 
   function createPickingSession() {
     addButtonLocked = true;
     addBtn.style.display = "none";
-    openSessionModal("Creating picking session…");
+    openSessionModal("Creating picking session…", "Add photos");
     const container = sessionModalBody;
     let pollInterval;
-    let syncPollTimeout;
     fetch("/frame_admin/manage", {
         method: "GET",
         headers: {
@@ -274,7 +313,6 @@
             .then(updateData => {
               if (updateData.mediaItemsSet) {
                 clearTimeout(pollInterval);
-                if (syncPollTimeout) clearTimeout(syncPollTimeout);
                 container.innerHTML = "";
                 const syncingMessage = document.createElement("div");
                 syncingMessage.id = "sync-status";
@@ -282,43 +320,28 @@
                 container.appendChild(syncingMessage);
                 addButtonLocked = false;
                 updateSelectionButtons();
-                const SYNC_POLL_INTERVAL = 1500;
-                function pollSyncProgress() {
-                  fetch("/frame_admin/sync_progress")
-                    .then(res => {
-                      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                      return res.json();
-                    })
-                    .then(status => {
-                      const { total_steps, current_step, failed_count } = status;
-                      if (total_steps === 0) {
-                        const statusEl = document.getElementById("sync-status");
-                        if (statusEl) statusEl.textContent = "No sync needed.";
-                        loadAlbum(1, { onComplete: closeSessionModal });
-                        return;
-                      }
-                      const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
-                      const statusEl = document.getElementById("sync-status");
-                      if (statusEl) {
-                        statusEl.textContent = failed_count > 0
-                          ? `Sync completed with ${failed_count} failure(s).`
-                          : `Syncing new photos… ${percent}%`;
-                      }
-                      if (total_steps > 0 && current_step >= total_steps) {
-                        if (statusEl && failed_count === 0) {
-                          statusEl.textContent = "Sync complete. Refreshing album…";
-                        }
-                        loadAlbum(1, { onComplete: closeSessionModal });
-                        return;
-                      }
-                      syncPollTimeout = setTimeout(pollSyncProgress, SYNC_POLL_INTERVAL);
-                    })
-                    .catch(err => {
-                      console.error("Sync progress error:", err);
-                      syncPollTimeout = setTimeout(pollSyncProgress, SYNC_POLL_INTERVAL * 2);
-                    });
-                }
-                pollSyncProgress();
+                pollSyncProgress({
+                  onUpdate: (status) => {
+                    const { total_steps, current_step, failed_count } = status;
+                    const statusEl = document.getElementById("sync-status");
+                    if (!statusEl) return;
+                    if (total_steps === 0) {
+                      statusEl.textContent = "No sync needed.";
+                      return;
+                    }
+                    const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
+                    statusEl.textContent = failed_count > 0
+                      ? `Sync completed with ${failed_count} failure(s).`
+                      : `Syncing new photos… ${percent}%`;
+                  },
+                  onComplete: (status) => {
+                    const statusEl = document.getElementById("sync-status");
+                    if (statusEl && status.failed_count === 0) {
+                      statusEl.textContent = "Sync complete. Refreshing album…";
+                    }
+                    loadAlbum(1, { onComplete: closeSessionModal });
+                  }
+                });
 
               } else if (updateData.pollingConfig && updateData.pollingConfig.timeoutIn <= 0) {
                 clearTimeout(pollInterval);
@@ -533,10 +556,65 @@
     nextBtn.addEventListener("click", () => {
       if (currentPage < totalPages) loadAlbum(currentPage + 1);
     });
+
+    function startDeleteFlow(photoIds) {
+      addButtonLocked = true;
+      updateSelectionButtons();
+      openSessionModal("Starting removal…", "Remove photos");
+      fetch("/frame_admin/manage", {
+        method: "POST",
+        headers: {
+          "manage-action": "delete",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ photos: photoIds })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return res.json();
+        })
+        .then(() => {
+          const statusEl = document.createElement("div");
+          statusEl.id = "sync-status";
+          statusEl.textContent = "Removing photos…";
+          sessionModalBody.innerHTML = "";
+          sessionModalBody.appendChild(statusEl);
+
+          pollSyncProgress({
+            onUpdate: (status) => {
+              const { total_steps, current_step, failed_count } = status;
+              if (total_steps === 0) {
+                statusEl.textContent = "No removal needed.";
+                return;
+              }
+              const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
+              statusEl.textContent = failed_count > 0
+                ? `Removal completed with ${failed_count} failure(s).`
+                : `Removing photos… ${percent}%`;
+            },
+            onComplete: (status) => {
+              selectedIds.clear();
+              persistSelections(selectedIds);
+              addButtonLocked = false;
+              updateSelectionButtons();
+              if (status.failed_count === 0) {
+                statusEl.textContent = "Removal complete. Refreshing album…";
+              }
+              loadAlbum(1, { onComplete: closeSessionModal });
+            }
+          });
+        })
+        .catch(err => {
+          console.error("Remove photos error:", err);
+          sessionModalBody.textContent = "Failed to start removal. Please try again.";
+          addButtonLocked = false;
+          updateSelectionButtons();
+        });
+    }
+
     removeBtn.addEventListener("click", () => {
       if (!selectedIds.size) return;
-      const payload = { photos: Array.from(selectedIds) };
-      console.log("Remove selected images payload:", payload);
+      startDeleteFlow(Array.from(selectedIds));
     });
 
     document.addEventListener("DOMContentLoaded", () => {

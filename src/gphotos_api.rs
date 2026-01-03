@@ -203,40 +203,40 @@ impl PickingSession {
     }
 }
 
-pub fn get_mediaitems(
-    access_token: &str,
-    album_id: &str,
-) -> Result<HashSet<MediaItem>, Box<dyn std::error::Error>> {
-    let mut media_item_list: HashSet<MediaItem> = HashSet::new();
-    let mut page_token = "".to_string();
-    loop {
-        let body = json!({
-            "albumId": album_id,
-            "pageToken": page_token,
-            "pageSize": 100,
-        });
-        let response: SearchResult<MediaItem> =
-            ureq::post("https://photoslibrary.googleapis.com/v1/mediaItems:search")
-                .header("Authorization", format!("Bearer {}", access_token).as_str())
-                .header("Content-Type", "application/json")
-                .send_json(&body)?
-                .into_body()
-                .read_json()?;
-        for media_item in response.result {
-            match media_item.mimeType.as_str() {
-                "image/jpeg" | "image/png" | "image/bmp" | "image/gif" => {
-                    media_item_list.insert(media_item);
-                }
-                _ => continue,
-            }
-        }
-        match response.nextPageToken.is_some() {
-            true => page_token = response.nextPageToken.expect("This should never fail"),
-            false => break,
-        }
-    }
-    Ok(media_item_list)
-}
+// pub fn get_mediaitems(
+//     access_token: &str,
+//     album_id: &str,
+// ) -> Result<HashSet<MediaItem>, Box<dyn std::error::Error>> {
+//     let mut media_item_list: HashSet<MediaItem> = HashSet::new();
+//     let mut page_token = "".to_string();
+//     loop {
+//         let body = json!({
+//             "albumId": album_id,
+//             "pageToken": page_token,
+//             "pageSize": 100,
+//         });
+//         let response: SearchResult<MediaItem> =
+//             ureq::post("https://photoslibrary.googleapis.com/v1/mediaItems:search")
+//                 .header("Authorization", format!("Bearer {}", access_token).as_str())
+//                 .header("Content-Type", "application/json")
+//                 .send_json(&body)?
+//                 .into_body()
+//                 .read_json()?;
+//         for media_item in response.result {
+//             match media_item.mimeType.as_str() {
+//                 "image/jpeg" | "image/png" | "image/bmp" | "image/gif" => {
+//                     media_item_list.insert(media_item);
+//                 }
+//                 _ => continue,
+//             }
+//         }
+//         match response.nextPageToken.is_some() {
+//             true => page_token = response.nextPageToken.expect("This should never fail"),
+//             false => break,
+//         }
+//     }
+//     Ok(media_item_list)
+// }
 
 fn build_download_path(base_url: &str, width: i64, height: i64) -> String {
     if width > height {
@@ -302,25 +302,25 @@ pub fn get_photo_from_baseurl(
     download_image(&path, access_token)
 }
 
-pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std::error::Error>> {
-    let mut album_list = Vec::new();
-    let mut page_token = "".to_string();
-    loop {
-        let response: SearchResult<PhotoAlbum> =
-            ureq::get("https://photoslibrary.googleapis.com/v1/albums")
-                .header("Authorization", format!("Bearer {}", access_token).as_str())
-                .header("Content-Type", "application/json")
-                .query_pairs(vec![("pageToken", page_token.as_str())])
-                .call()?
-                .into_body()
-                .read_json()?;
-        for album in response.result {
-            album_list.push(album);
-        }
-        match response.nextPageToken.is_some() {
-            true => page_token = response.nextPageToken.expect("This should never fail"),
-            false => break,
-        }
-    }
-    Ok(album_list)
-}
+// pub fn get_album_list(access_token: &str) -> Result<Vec<PhotoAlbum>, Box<dyn std::error::Error>> {
+//     let mut album_list = Vec::new();
+//     let mut page_token = "".to_string();
+//     loop {
+//         let response: SearchResult<PhotoAlbum> =
+//             ureq::get("https://photoslibrary.googleapis.com/v1/albums")
+//                 .header("Authorization", format!("Bearer {}", access_token).as_str())
+//                 .header("Content-Type", "application/json")
+//                 .query_pairs(vec![("pageToken", page_token.as_str())])
+//                 .call()?
+//                 .into_body()
+//                 .read_json()?;
+//         for album in response.result {
+//             album_list.push(album);
+//         }
+//         match response.nextPageToken.is_some() {
+//             true => page_token = response.nextPageToken.expect("This should never fail"),
+//             false => break,
+//         }
+//     }
+//     Ok(album_list)
+// }

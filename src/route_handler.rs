@@ -5,9 +5,12 @@ use serde_json;
 use crate::{
     database::CONNECTION_POOL,
     google_oauth::{refresh_token, request_token, revoke_token, AuthGuard, ValidUser},
+    // gphotos_api::{
+    //     get_album_list, get_mediaitems, get_photo, MediaItem, MediaMetadata, PickedMediaItem,
+    //     PickingSession,
+    // },
     gphotos_api::{
-        get_album_list, get_mediaitems, get_photo, MediaItem, MediaMetadata, PickedMediaItem,
-        PickingSession,
+        get_photo, MediaItem, MediaMetadata, PickedMediaItem, PickingSession
     },
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
@@ -674,7 +677,7 @@ fn picked_to_media_item(picked: &PickedMediaItem) -> MediaItem {
     }
 }
 
-fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
     let auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
         Err(_) => {
@@ -687,6 +690,128 @@ fn handle_manage(request: Request, auth_guard: AuthGuard<ValidUser>) {
             return;
         }
     };
+
+    if let Some(header) = request.headers().iter().find(|h| h.field.equiv("manage-action")) {
+        match header.value.as_str() {
+            "delete" => {
+                let mut body = String::new();
+                if let Err(e) = request.as_reader().read_to_string(&mut body) {
+                    log::error!("(handle_manage) failed to read delete request body: {:?}", e);
+                    serve_error(request, tiny_http::StatusCode(400), "Invalid request body");
+                    return;
+                }
+
+                #[derive(Deserialize)]
+                struct DeletePayload {
+                    photos: Vec<String>,
+                }
+
+                let payload: DeletePayload = match serde_json::from_str(&body) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        log::error!("(handle_manage) delete payload parse error: {:?}", e);
+                        serve_error(request, tiny_http::StatusCode(400), "Invalid JSON payload");
+                        return;
+                    }
+                };
+
+                let mut ids: HashSet<String> = payload
+                    .photos
+                    .into_iter()
+                    .filter(|s| !s.trim().is_empty())
+                    .collect();
+
+                if ids.is_empty() {
+                    serve_error(request, tiny_http::StatusCode(400), "No photo ids provided");
+                    return;
+                }
+
+                TASK_BOARD.reset();
+                let queue = Arc::new(TaskQueue::new());
+                let mut task_count = 0;
+                for id in ids.drain() {
+                    queue.push(Task {
+                        id: TASK_BOARD.add_task(Action::Remove),
+                        action: Action::Remove,
+                        data: TaskData::String(id),
+                        status: Status::Pending,
+                    });
+                    task_count += 1;
+                }
+
+                let threads = min(task_count, 4);
+                for _ in 0..threads {
+                    let queue = queue.clone();
+                    thread::spawn(move || loop {
+                        if queue.is_empty() {
+                            log::info!("(handle_manage) delete queue is empty, nothing to do");
+                            break;
+                        }
+                        let task = queue.pop();
+                        TASK_BOARD.set_board_data(task.id, Status::InProgress);
+                        let mut dbclient = match CONNECTION_POOL.get_client() {
+                            Ok(dbclient) => dbclient,
+                            Err(err) => {
+                                log::error!("(handle_manage) delete: {err}");
+                                TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                continue;
+                            }
+                        };
+                        let mut success = true;
+                        match task.data {
+                            TaskData::String(item_id) => {
+                                if let Err(err) =
+                                    dbclient.execute("DELETE FROM album WHERE item_id = $1", &[&item_id])
+                                {
+                                    log::error!(
+                                        "(handle_manage) db delete error for {}: {:?}",
+                                        item_id,
+                                        err
+                                    );
+                                    TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                    success = false;
+                                }
+                            }
+                            _ => {
+                                log::error!("(handle_manage) unexpected task data in delete flow");
+                                TASK_BOARD.set_board_data(task.id, Status::Failed);
+                                success = false;
+                            }
+                        }
+                        CONNECTION_POOL.release_client(dbclient);
+                        if success {
+                            TASK_BOARD.set_board_data(task.id, Status::Completed);
+                        }
+                    });
+                }
+                log::info!(
+                    "(handle_manage) dispatched {} delete thread(s) for {} items",
+                    threads,
+                    task_count
+                );
+                let body = match serde_json::to_string(&serde_json::json!({ "queued": task_count })) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        log::error!("(handle_manage) serialize error: {:?}", e);
+                        serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+                        return;
+                    }
+                };
+                let response = Response::empty(tiny_http::StatusCode(202))
+                    .with_data(body.as_bytes(), Some(body.len()))
+                    .with_header(
+                        tiny_http::Header::from_str("Content-Type: application/json")
+                            .expect("This should never fail"),
+                    );
+                dispatch_response(request, response);
+                return;
+            }
+            _ => {
+                serve_error(request, tiny_http::StatusCode(400), "Invalid manage action");
+                return;
+            }
+        }
+    }
 
     if let Some(header) = request.headers().iter().find(|h| h.field.equiv("picker-session")) {
         let value = header.value.as_str();

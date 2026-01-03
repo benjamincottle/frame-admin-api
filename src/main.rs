@@ -19,8 +19,8 @@ use crate::{
 };
 
 use std::{
-    env,
-    io::{BufRead, stdin},
+    // env,
+    // io::{BufRead, stdin},
     process::exit,
     sync::Arc,
     thread,
@@ -68,7 +68,8 @@ fn main() {
                         continue;
                     }
                 };
-                if request.method().as_str() != "GET" {
+                let method = request.method().as_str();
+                if method != "GET" && method != "POST" {
                     serve_error(request, tiny_http::StatusCode(405), "Method not allowed");
                     continue;
                 }
