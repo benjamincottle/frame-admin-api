@@ -77,20 +77,29 @@
     }
     #album-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-      gap: 12px;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      justify-items: stretch;
+      gap: 14px;
+      column-gap: 14px;
+      row-gap: 14px;
+    }
+    #album-pagination button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
     }
     .album-card {
       border: 1px solid #e0e0e0;
       border-radius: 6px;
       padding: 6px;
       background: #fafafa;
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       gap: 6px;
       position: relative;
       overflow: hidden;
       transition: box-shadow 0.15s ease, transform 0.15s ease;
+      width: 100%;
     }
     .album-card::after {
       content: "";
@@ -147,7 +156,7 @@
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
-    <button id="album-prev">Prev</button>
+    <button id="album-prev" disabled>Prev</button>
     <span id="album-page-info"></span>
     <button id="album-next">Next</button>
   </div>
@@ -351,7 +360,9 @@
   addBtn.addEventListener("click", createPickingSession);
 
   (function() {
-    const PAGE_SIZE = 12;
+    const ROWS_PER_PAGE = 4;
+    const MAX_PAGE_SIZE = 24; // server caps at 24
+    let pageSize = 24;
     let currentPage = 1;
     let totalPages = 1;
     const STORAGE_KEY = "frame-admin-album-selected";
@@ -360,6 +371,18 @@
     const prevBtn = document.getElementById("album-prev");
     const nextBtn = document.getElementById("album-next");
     const errorBox = document.getElementById("album-error");
+
+    function computePageSizeFromGrid() {
+      const styles = window.getComputedStyle(grid);
+      const cols = styles.gridTemplateColumns
+        ? styles.gridTemplateColumns.split(" ").filter(Boolean).length
+        : 0;
+      const inferredCols = cols || Math.max(1, Math.floor(grid.clientWidth / 190));
+      return Math.max(
+        ROWS_PER_PAGE,
+        Math.min(MAX_PAGE_SIZE, inferredCols * ROWS_PER_PAGE)
+      );
+    }
 
     function loadSelections() {
       try {
@@ -480,8 +503,13 @@
 
     function loadAlbum(page, opts = {}) {
       const { onComplete } = opts;
+      const newSize = computePageSizeFromGrid();
+      if (newSize !== pageSize) {
+        pageSize = newSize;
+        page = 1;
+      }
       setLoading(true);
-      fetch(`/frame_admin/album_data?page=${page}&pageSize=${PAGE_SIZE}`)
+      fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`)
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -512,7 +540,20 @@
     });
 
     document.addEventListener("DOMContentLoaded", () => {
+      pageSize = computePageSizeFromGrid();
       loadAlbum(1);
+    });
+
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        const newSize = computePageSizeFromGrid();
+        if (newSize !== pageSize) {
+          pageSize = newSize;
+          loadAlbum(1);
+        }
+      }, 150);
     });
 
     // Expose for sync refresh
