@@ -60,7 +60,6 @@ pub struct User {
     pub name: String,
     pub email: String,
     pub credentials: OAuthCreds,
-    pub photo: String,
     pub verified: bool,
     pub createdAt: DateTime<Utc>,
     pub updatedAt: DateTime<Utc>,

@@ -7,6 +7,7 @@ use serde_json;
 use std::{
     collections::HashMap,
     error::Error,
+    fmt,
     sync::{Arc, Mutex},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
@@ -24,13 +25,9 @@ pub struct OAuthCreds {
 
 #[derive(Deserialize)]
 pub struct GoogleUserResult {
-    pub id: String,
     pub email: String,
     pub verified_email: bool,
     pub name: String,
-    pub given_name: String,
-    pub family_name: String,
-    pub picture: String,
 }
 
 pub fn request_token(
@@ -71,7 +68,6 @@ pub fn request_token(
         if let Some(user) = user {
             user_id = user.id.clone();
             email.clone_into(&mut user.email);
-            user.photo = google_user.picture;
             user.updatedAt = current_datetime;
             let refresh_token = match oauth_creds.refresh_token.clone() {
                 Some(refresh_token) => Some(refresh_token),
@@ -100,7 +96,6 @@ pub fn request_token(
                     token_type: oauth_creds.token_type.clone(),
                     refresh_token: oauth_creds.refresh_token,
                 },
-                photo: google_user.picture,
                 createdAt: current_datetime,
                 updatedAt: current_datetime,
             };
@@ -327,6 +322,28 @@ pub enum JWTParserError {
     UnknownKid,
     KeyProvider(GoogleKeyProviderError),
     WrongToken(jsonwebtoken::errors::Error),
+}
+
+impl fmt::Display for GoogleKeyProviderError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GoogleKeyProviderError::KeyNotFound(msg) => write!(f, "key not found: {}", msg),
+            GoogleKeyProviderError::FetchError(msg) => write!(f, "fetch error: {}", msg),
+            GoogleKeyProviderError::ParseError(msg) => write!(f, "parse error: {}", msg),
+            GoogleKeyProviderError::CreateKeyError(msg) => write!(f, "key creation error: {}", msg),
+        }
+    }
+}
+
+impl fmt::Display for JWTParserError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            JWTParserError::WrongHeader => write!(f, "wrong JWT header"),
+            JWTParserError::UnknownKid => write!(f, "unknown key id"),
+            JWTParserError::KeyProvider(e) => write!(f, "key provider error: {}", e),
+            JWTParserError::WrongToken(e) => write!(f, "invalid token: {}", e),
+        }
+    }
 }
 
 pub struct JWTParser {

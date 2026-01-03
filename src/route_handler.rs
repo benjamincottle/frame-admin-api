@@ -1,14 +1,10 @@
 use chrono::{Duration, Utc};
-use serde::{Deserialize, Serialize, de};
+use serde::{Deserialize, Serialize};
 use serde_json;
 
 use crate::{
     database::CONNECTION_POOL,
-    google_oauth::{AuthGuard, ValidUser, refresh_token, request_token, revoke_token},
-    // gphotos_api::{
-    //     get_album_list, get_mediaitems, get_photo, MediaItem, MediaMetadata, PickedMediaItem,
-    //     PickingSession,
-    // },
+    google_oauth::{AuthGuard, ValidUser, request_token, revoke_token},
     gphotos_api::{MediaItem, MediaMetadata, PickedMediaItem, PickingSession, get_photo},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
@@ -29,7 +25,6 @@ use std::{
     str::FromStr,
     sync::Arc,
     thread,
-    time::{SystemTime, UNIX_EPOCH},
 };
 use tera::Context;
 use tiny_http::{Header, Request, Response};
@@ -72,14 +67,11 @@ pub fn route_request(app_data: AppState, request: Request) {
     );
     router.add("/frame_admin/oauth/google", "oauth_google".to_string());
     router.add("/frame_admin/oauth/revoke", "oauth_revoke".to_string());
-    // router.add("/frame_admin/config", "config".to_string());
-    // router.add("/frame_admin/sync", "sync".to_string());
     router.add("/frame_admin/sync_progress", "sync_progress".to_string());
     router.add("/frame_admin/monitor", "monitor".to_string());
     router.add("/frame_admin/album_data", "album_data".to_string());
     router.add("/frame_admin/manage", "manage".to_string());
     router.add("/frame_admin/telemetry_data", "telemetry_data".to_string());
-    // router.add("/frame_admin/tasks", "tasks".to_string());
     router.add("/frame_admin/image/:id", "image".to_string());
     let matched = match router.recognize(url) {
         Ok(m) => m,
@@ -110,22 +102,9 @@ pub fn route_request(app_data: AppState, request: Request) {
         "index" => {
             handle_index(app_data, request, auth_guard);
         }
-        // "config" => {
-        //     if let Some(err) = handle_config(app_data, request, auth_guard).err() {
-        //         log::error!("(route_request) sync route failed: {}", err);
-        //     };
-        // }
-        // "sync" => {
-        //     if let Some(err) = handle_sync(app_data, request, auth_guard).err() {
-        //         log::error!("(route_request) sync route failed: {}", err);
-        //     };
-        // }
         "sync_progress" => {
             handle_sync_progress(request, auth_guard);
         }
-        // "tasks" => {
-        //     handle_tasks(request, auth_guard);
-        // }
         "monitor" => {
             handle_monitor(request, auth_guard);
         }
@@ -387,283 +366,6 @@ fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<Vali
     dispatch_response(request, response);
 }
 
-// fn handle_config(
-//     app_data: AppState,
-//     request: Request,
-//     auth_guard: AuthGuard<ValidUser>,
-// ) -> Result<(), Box<dyn std::error::Error>> {
-//     let auth_guard = match auth_guard {
-//         Ok(auth_guard) => auth_guard,
-//         Err(_) => {
-//             let mut response = Response::empty(tiny_http::StatusCode(302));
-//             response.add_header(
-//                 tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
-//                     .expect("This should never fail"),
-//             );
-//             dispatch_response(request, response);
-//             return Ok(());
-//         }
-//     };
-//     if let Some(album_id) = request
-//         .headers()
-//         .iter()
-//         .find(|header| header.field.equiv("Google-Photos-Album-ID"))
-//     {
-//         let mut env = app_data.env.lock().unwrap();
-//         if env
-//             .google_photos_album_ids
-//             .contains(&album_id.value.to_string())
-//         {
-//             env.google_photos_album_ids
-//                 .retain(|id| id != &album_id.value);
-//         } else {
-//             env.google_photos_album_ids
-//                 .push(album_id.value.clone().to_string());
-//         }
-//         let google_photos_album_list = env.google_photos_album_ids.clone();
-//         drop(env);
-//         app_data.save("secrets/");
-//         let album_list = ureq::serde_json::to_string(&google_photos_album_list)
-//             .expect("couldn't serialise album list");
-//         let response = Response::from_string(album_list).with_header(
-//             tiny_http::Header::from_str("Content-Type: application/json")
-//                 .expect("This should never fail"),
-//         );
-//         dispatch_response(request, response);
-//         return Ok(());
-//     };
-//     let env = app_data.env.lock().unwrap();
-//     let google_photos_album_ids = env.google_photos_album_ids.clone();
-//     drop(env);
-//     let mut context = Context::new();
-//     if google_photos_album_ids.is_empty() {
-//         context.insert("config", &true);
-//     }
-//     let mut credentials = auth_guard.user.credentials.clone();
-//     if SystemTime::now()
-//         .duration_since(UNIX_EPOCH)
-//         .expect("Time went backwards")
-//         .as_secs()
-//         > credentials.expires_in
-//     {
-//         log::info!("(handle_sync) token expired, should refresh");
-//         credentials = refresh_token(&app_data, &auth_guard.user)?;
-//     }
-//     let access_token = credentials.access_token;
-//     let album_list = match get_album_list(&access_token) {
-//         Ok(album_list) => album_list,
-//         Err(e) => {
-//             log::error!("(handle_config) error getting album list, {}", e);
-//             serve_error(
-//                 request,
-//                 tiny_http::StatusCode(500),
-//                 "Internal server error: error getting album list",
-//             );
-//             return Ok(());
-//         }
-//     };
-//     context.insert("selected_albums", &google_photos_album_ids);
-//     context.insert("album_list", &album_list);
-//     context.insert("profile", &auth_guard.user.photo);
-//     let rendered = TEMPLATES.render("config.html.tera", &context);
-//     let response = Response::from_data(rendered);
-//     dispatch_response(request, response);
-//     Ok(())
-// }
-
-// fn handle_sync(
-//     app_data: AppState,
-//     request: Request,
-//     auth_guard: AuthGuard<ValidUser>,
-// ) -> Result<(), Box<dyn std::error::Error>> {
-//     let auth_guard = match auth_guard {
-//         Ok(auth_guard) => auth_guard,
-//         Err(_) => {
-//             let mut response = Response::empty(tiny_http::StatusCode(302));
-//             response.add_header(
-//                 tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
-//                     .expect("This should never fail"),
-//             );
-//             dispatch_response(request, response);
-//             return Ok(());
-//         }
-//     };
-//     let mut credentials = auth_guard.user.credentials.clone();
-//     if SystemTime::now()
-//         .duration_since(UNIX_EPOCH)
-//         .expect("Time went backwards")
-//         .as_secs()
-//         > credentials.expires_in
-//     {
-//         log::info!("(handle_sync) token expired, should refresh");
-//         credentials = refresh_token(&app_data, &auth_guard.user)?;
-//     }
-//     let access_token = credentials.access_token;
-//     let mut dbclient = CONNECTION_POOL.get_client()?;
-//     let mut db_set = HashSet::new();
-//     for row in dbclient.query("SELECT item_id FROM album", &[])? {
-//         let media_item_id: &str = row.get(0);
-//         db_set.insert(media_item_id.to_string());
-//     }
-//     CONNECTION_POOL.release_client(dbclient);
-//     let mut gg_mediaitems: HashSet<MediaItem> = HashSet::new();
-//     let env = app_data.env.lock().unwrap();
-//     let google_photos_album_ids = env.google_photos_album_ids.clone();
-//     drop(env);
-//     for album_id in google_photos_album_ids {
-//         let album_mediaitems = get_mediaitems(&access_token, &album_id)?;
-//         gg_mediaitems.extend(album_mediaitems);
-//     }
-//     let gg_set: HashSet<_> = gg_mediaitems
-//         .iter()
-//         .map(|media_item| media_item.id.clone())
-//         .collect();
-//     let new_set: HashSet<_> = gg_set.difference(&db_set).cloned().collect();
-//     let deleted_set: HashSet<_> = db_set.difference(&gg_set).cloned().collect();
-//     TASK_BOARD.reset();
-//     if new_set.is_empty() && deleted_set.is_empty() {
-//         let response = Response::empty(tiny_http::StatusCode(200));
-//         dispatch_response(request, response);
-//         return Ok(());
-//     }
-//     let queue = Arc::new(TaskQueue::new());
-//     if !new_set.is_empty() {
-//         log::info!("(handle_sync) found {} new media items", new_set.len());
-//         for media_item in gg_mediaitems.iter() {
-//             if new_set.contains(&media_item.id) {
-//                 queue.push(Task {
-//                     id: TASK_BOARD.add_task(Action::Add),
-//                     action: Action::Add,
-//                     data: TaskData::MediaItem(media_item.clone()),
-//                     status: Status::Pending,
-//                 });
-//             }
-//         }
-//     }
-//     if !deleted_set.is_empty() {
-//         log::info!(
-//             "(handle_sync) found {} deleted media items",
-//             deleted_set.len()
-//         );
-//         for media_item_id in deleted_set.iter() {
-//             queue.push(Task {
-//                 id: TASK_BOARD.add_task(Action::Remove),
-//                 action: Action::Remove,
-//                 data: TaskData::String(media_item_id.to_string()),
-//                 status: Status::Pending,
-//             });
-//         }
-//     }
-//     let threads = min(new_set.len() + deleted_set.len(), 4);
-//     for _ in 0..threads {
-//         let queue = queue.clone();
-//         thread::spawn(move || loop {
-//             if queue.is_empty() {
-//                 log::info!("(handle_sync) queue is empty, nothing to do");
-//                 break;
-//             }
-//             let task = queue.pop();
-//             TASK_BOARD.set_board_data(task.id, Status::InProgress);
-//             let mut dbclient = match CONNECTION_POOL.get_client() {
-//                 Ok(dbclient) => dbclient,
-//                 Err(err) => {
-//                     log::error!("(handle_sync): {err}");
-//                     TASK_BOARD.set_board_data(task.id, Status::Failed);
-//                     continue;
-//                 }
-//             };
-//             match task.data {
-//                 TaskData::MediaItem(media_item) => {
-//                     log::info!("(handle_sync) retrieving photo");
-//                     match get_photo(&media_item)
-//                         .map(|data| {
-//                             log::info!("(handle_sync) encoding image");
-//                             encode_image(&data)
-//                         })
-//                         .and_then(|data| {
-//                             log::info!("(handle_sync) adding media item to db");
-//                             let portrait = media_item.mediaMetadata.width.parse::<i64>()?
-//                                 < media_item.mediaMetadata.height.parse::<i64>()?;
-//                             Ok(dbclient.execute(
-//                                 "INSERT INTO album (item_id, product_url, ts, portrait, data) VALUES ($1, $2, $3, $4, $5)",
-//                                 &[
-//                                     &media_item.id,
-//                                     &media_item.productUrl,
-//                                     &0_i64,
-//                                     &portrait,
-//                                     &data,
-//                                 ],
-//                             ))
-//                         }) {
-//                         Ok(_) => {}
-//                         Err(err) => {
-//                             log::error!("(handle_sync): {err}");
-//                             TASK_BOARD.set_board_data(task.id, Status::Failed);
-//                         }
-//                     };
-//                 }
-//                 TaskData::String(item_id) => {
-//                     log::info!("(handle_sync) removing record from db");
-//                     match dbclient.execute("DELETE FROM album WHERE item_id = $1", &[&item_id]) {
-//                         Ok(_) => {}
-//                         Err(err) => {
-//                             log::error!("(handle_sync): {err}");
-//                             TASK_BOARD.set_board_data(task.id, Status::Failed);
-//                         }
-//                     };
-//                 }
-//             }
-//             CONNECTION_POOL.release_client(dbclient);
-//             TASK_BOARD.set_board_data(task.id, Status::Completed);
-//         });
-//     }
-//     log::info!("(handle_sync) {} sync thread(s) dispatched", threads);
-//     let response = Response::empty(tiny_http::StatusCode(202));
-//     dispatch_response(request, response);
-//     Ok(())
-// }
-
-// fn handle_tasks(request: Request, auth_guard: AuthGuard<ValidUser>) {
-//     match auth_guard {
-//         Ok(_) => {}
-//         Err(_) => {
-//             serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
-//             return;
-//         }
-//     };
-//     let body =
-//         ureq::serde_json::to_string(&TASK_BOARD.get_board()).expect("can't serialize task board");
-//     let rendered = body.as_bytes();
-//     let response = Response::empty(tiny_http::StatusCode(200))
-//         .with_data(rendered, Some(rendered.len()))
-//         .with_header(
-//             tiny_http::Header::from_str("Content-Type: application/json")
-//                 .expect("This should never fail"),
-//         );
-//     dispatch_response(request, response);
-// }
-
-// fn handle_sync_progress(request: Request, auth_guard: AuthGuard<ValidUser>) {
-//     match auth_guard {
-//         Ok(_) => {}
-//         Err(_) => {
-//             serve_error(request, tiny_http::StatusCode(401), "Unauthorised");
-//             return;
-//         }
-//     };
-//     let body =
-//         ureq::serde_json::to_string(&TASK_BOARD.board_status().expect("can't get board status"))
-//             .expect("can't serialize task board");
-//     let rendered = body.as_bytes();
-//     let response = Response::empty(tiny_http::StatusCode(200))
-//         .with_data(rendered, Some(rendered.len()))
-//         .with_header(
-//             tiny_http::Header::from_str("Content-Type: application/json")
-//                 .expect("This should never fail"),
-//         );
-//     dispatch_response(request, response);
-// }
-
 fn picked_to_media_item(picked: &PickedMediaItem) -> MediaItem {
     MediaItem {
         id: picked.id.clone(),
@@ -740,9 +442,7 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                 for id in ids.drain() {
                     queue.push(Task {
                         id: TASK_BOARD.add_task(Action::Remove),
-                        action: Action::Remove,
                         data: TaskData::String(id),
-                        status: Status::Pending,
                     });
                     task_count += 1;
                 }
@@ -945,12 +645,10 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                                 let media_item = picked_to_media_item(picked_item);
                                                 queue.push(Task {
                                                     id: TASK_BOARD.add_task(Action::Add),
-                                                    action: Action::Add,
                                                     data: TaskData::MediaItemWithToken(
                                                         media_item,
                                                         access_token.clone(),
                                                     ),
-                                                    status: Status::Pending,
                                                 });
                                                 task_count += 1;
                                             } else {
@@ -998,42 +696,6 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                                             };
                                                         let mut success = true;
                                                         match task.data {
-                                                            TaskData::MediaItem(media_item) => {
-                                                                log::info!(
-                                                                    "(handle_manage) retrieving photo"
-                                                                );
-                                                                match get_photo(&media_item, None)
-                                                                .map(|data| {
-                                                                    log::info!("(handle_manage) encoding image");
-                                                                    encode_image(&data)
-                                                                })
-                                                                .and_then(|data| {
-                                                                    log::info!("(handle_manage) adding media item to db");
-                                                                    let portrait = media_item.mediaMetadata.width.parse::<i64>()?
-                                                                        < media_item.mediaMetadata.height.parse::<i64>()?;
-                                                                    dbclient.execute(
-                                                                        "INSERT INTO album (item_id, ts, portrait, data) VALUES ($1, $2, $3, $4)",
-                                                                        &[
-                                                                            &media_item.id,
-                                                                            &0_i64,
-                                                                            &portrait,
-                                                                            &data,
-                                                                        ],
-                                                                    )?;
-                                                                    Ok(())
-                                                                }) {
-                                                                Ok(_) => {}
-                                                                Err(err) => {
-                                                                    log::error!(
-                                                                        "(handle_manage) db insert error for {}: {:?}",
-                                                                        media_item.id,
-                                                                        err
-                                                                    );
-                                                                    TASK_BOARD.set_board_data(task.id, Status::Failed);
-                                                                    success = false;
-                                                                }
-                                                            };
-                                                            }
                                                             TaskData::MediaItemWithToken(
                                                                 media_item,
                                                                 token,
@@ -1128,7 +790,7 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
     }
 
     let mut context = Context::new();
-    context.insert("profile", &auth_guard.user.photo);
+    context.insert("is_authenticated", &true);
     let rendered = TEMPLATES.render("manage.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -1267,7 +929,7 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
 }
 
 fn handle_monitor(request: Request, auth_guard: AuthGuard<ValidUser>) {
-    let auth_guard = match auth_guard {
+    let _auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
         Err(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
@@ -1280,7 +942,7 @@ fn handle_monitor(request: Request, auth_guard: AuthGuard<ValidUser>) {
         }
     };
     let mut context = Context::new();
-    context.insert("profile", &auth_guard.user.photo);
+    context.insert("is_authenticated", &true);
     let rendered = TEMPLATES.render("monitor.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);

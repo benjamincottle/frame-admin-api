@@ -90,20 +90,6 @@ impl SESSION_MGR {
             .take(64)
             .collect::<String>()
     }
-
-    pub fn dump(&self) {
-        let session_mgr = self.lock().unwrap();
-        println!("[Debug] Session Manager:");
-        for (session_id, session) in session_mgr.sessions.clone() {
-            println!(
-                "[Debug]  session_id: {}, expires {:?}",
-                session_id, session.expires
-            );
-            for (key, value) in session.data {
-                println!("[Debug]    key: {}, value: {}", key, value);
-            }
-        }
-    }
 }
 
 #[derive(Debug)]

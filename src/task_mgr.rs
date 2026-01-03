@@ -25,11 +25,6 @@ impl TASK_BOARD {
         self.lock().unwrap();
     }
 
-    pub fn get_board(&self) -> TaskBoard {
-        let task_board = self.lock().unwrap();
-        task_board.clone()
-    }
-
     pub fn board_status(&self) -> Result<TaskBoardStatus, String> {
         let task_board = self
             .lock()
@@ -83,19 +78,6 @@ impl TASK_BOARD {
         task_board.next_task_id = 0;
         task_board.tasks.clear();
     }
-
-    pub fn dump(&self) {
-        let task_board = self.lock().unwrap();
-        println!("[Debug] Task Dashboard:");
-        println!("[Debug]   Tasks:");
-        for task in task_board.tasks.iter() {
-            println!(
-                "[Debug]     task_id: {:?}, action {:?}, status: {:?}",
-                task.0, task.1.action, task.1.status
-            );
-        }
-        println!("[Debug] next_task_id: {}", task_board.next_task_id);
-    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -121,7 +103,6 @@ pub struct TaskBoardStatus {
 
 #[derive(Debug)]
 pub enum TaskData {
-    MediaItem(MediaItem),
     MediaItemWithToken(MediaItem, String),
     String(String),
 }
@@ -138,16 +119,12 @@ pub struct BoardData {
     pub status: Status,
 }
 
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
-// pub struct TaskId(pub usize);
 type TaskId = usize;
 
 #[derive(Debug)]
 pub struct Task {
     pub id: TaskId,
-    pub action: Action,
     pub data: TaskData,
-    pub status: Status,
 }
 
 #[derive(Debug)]

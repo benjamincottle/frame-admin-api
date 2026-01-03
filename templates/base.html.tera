@@ -92,24 +92,6 @@
         stroke: none;
         scale: 21;
       }
-      .profile_image {
-        display: block;
-        position: relative;
-        width: 38px;
-        height: 38px;
-        border-radius: 50%;
-        top: 2px;
-        opacity: 0.9;
-        transition: opacity 0.3s ease-in-out;
-      }
-      .profile_image:hover {
-        opacity: 1;
-      }
-      .profile_ring {
-        position: absolute;
-        left: -4px;
-        top: -2px;
-      }
       button {
         cursor: pointer;
         height: 26px;
@@ -184,7 +166,7 @@
   <body>
     <section class="header">
       <div class="header_nav">
-{% if profile %}
+{% if is_authenticated | default(value=false) %}
         <div>
           <a href="{{ url_for(name='monitor') }}">
             <svg class="pg-icon" viewBox="-100 0 1624 1624" version="1.1" xmlns="http://www.w3.org/2000/svg">
