@@ -147,7 +147,42 @@
     }
     .album-card .meta { font-size: 12px; color: #555; }
     #album-pagination { margin-top: 24px; display: flex; gap: 8px; align-items: center; }
-    #album-error { margin-top: 8px; color: #c00; font-size: 14px; }    
+    #album-error { margin-top: 8px; color: #c00; font-size: 14px; }
+    .sync-meter {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 8px;
+      color: var(--text-colour);
+    }
+    .sync-meter svg {
+      pointer-events: none;
+      opacity: 0.76;
+      fill: none;
+      stroke-width: 2;
+      stroke: #2B2E33;
+      width: 64px;
+      height: 64px;
+    }
+    .sync-meter .sm-path {
+      transition: all 1s ease-in-out;
+    }
+    .sync-meter .sm-y { stroke-dasharray: 39.825; stroke-dashoffset: 39.825; stroke: #F6AD01; }
+    .sync-meter .sm-g { stroke-dasharray: 73.72; stroke-dashoffset: 73.72; stroke: #249A41; }
+    .sync-meter .sm-b { stroke-dasharray: 67.22; stroke-dashoffset: 67.22; stroke: #3174F1; }
+    .sync-meter .sm-r { stroke-dasharray: 74.05; stroke-dashoffset: 74.05; stroke: #E92D18; }
+    .sync-meter .sm-track {
+      transition: all 1s ease-in-out;
+      stroke: #2B2E33;
+    }
+    .sync-meter .sm-text {
+      stroke: none;
+      fill: #c0c0c0;
+      font-family: monospace;
+      font-size: 0.8em;
+      text-anchor: middle;
+      dominant-baseline: middle;
+    }
   </style>
 {% endblock head %}
 
@@ -186,6 +221,58 @@
   let addButtonLocked = false;
   let updateSelectionButtons = function() {};
   const SYNC_POLL_INTERVAL = 1500;
+  let progressMeterCounter = 0;
+
+  function createProgressMeter(container) {
+    const id = `sm-${++progressMeterCounter}`;
+    const wrapper = document.createElement("div");
+    wrapper.className = "sync-meter";
+    wrapper.innerHTML = `
+      <svg viewBox="-2 -2 44 44" aria-hidden="true">
+        <path id="${id}-y-track" class="sm-track" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z"></path>
+        <path id="${id}-y" class="sm-path sm-y" d="M4.02,28.27C2.73,25.8,2,22.98,2,20c0-2.87,0.68-5.59,1.88-8l-1.72-1.04C0.78,13.67,0,16.75,0,20c0,3.31,0.8,6.43,2.23,9.18L4.02,28.27z"></path>
+        <path id="${id}-g-track" class="sm-track" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z"></path>
+        <path id="${id}-g" class="sm-path sm-g" d="M32.15,33.27C28.95,36.21,24.68,38,20,38c-6.95,0-12.98-3.95-15.99-9.73l-1.79,0.91C5.55,35.61,12.26,40,20,40c5.2,0,9.93-1.98,13.48-5.23L32.15,33.27z"></path>
+        <path id="${id}-b-track" class="sm-track" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z"></path>
+        <path id="${id}-b" class="sm-path sm-b" d="M33.49,34.77C37.49,31.12,40,25.85,40,20c0-5.86-2.52-11.13-6.54-14.79l-1.37,1.46C35.72,9.97,38,14.72,38,20c0,5.25-2.26,9.98-5.85,13.27L33.49,34.77z"></path>
+        <path id="${id}-r-track" class="sm-track" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z"></path>
+        <path id="${id}-r" class="sm-path sm-r" d="M20,2c4.65,0,8.89,1.77,12.09,4.67l1.37-1.46C29.91,1.97,25.19,0,20,0l0,0C12.21,0,5.46,4.46,2.16,10.96L3.88,12C6.83,6.08,12.95,2,20,2z"></path>
+        <text id="${id}-t" class="sm-text" x="46%" y="48%">0%</text>
+      </svg>
+    `;
+    container.appendChild(wrapper);
+
+    const y = wrapper.querySelector(`#${id}-y`);
+    const g = wrapper.querySelector(`#${id}-g`);
+    const b = wrapper.querySelector(`#${id}-b`);
+    const r = wrapper.querySelector(`#${id}-r`);
+    const yTrack = wrapper.querySelector(`#${id}-y-track`);
+    const gTrack = wrapper.querySelector(`#${id}-g-track`);
+    const bTrack = wrapper.querySelector(`#${id}-b-track`);
+    const rTrack = wrapper.querySelector(`#${id}-r-track`);
+    const t = wrapper.querySelector(`#${id}-t`);
+
+    function update(percentage) {
+      const clamped = Math.max(0, Math.min(100, Math.round(percentage)));
+      const yLen = y.getTotalLength();
+      const gLen = g.getTotalLength();
+      const bLen = b.getTotalLength();
+      const rLen = r.getTotalLength();
+      y.style.strokeDashoffset = yLen - (yLen * (clamped / 100));
+      g.style.strokeDashoffset = gLen - (gLen * (clamped / 100));
+      b.style.strokeDashoffset = bLen - (bLen * (clamped / 100));
+      r.style.strokeDashoffset = rLen - (rLen * (clamped / 100));
+      const trackColour = clamped === 100 ? null : "#2B2E33";
+      yTrack.style.stroke = trackColour || "#F6AD01";
+      gTrack.style.stroke = trackColour || "#249A41";
+      bTrack.style.stroke = trackColour || "#3174F1";
+      rTrack.style.stroke = trackColour || "#E92D18";
+      t.textContent = `${clamped}%`;
+    }
+
+    update(0);
+    return { element: wrapper, update };
+  }
 
   function openSessionModal(initialMessage, titleText) {
     sessionModalTitle.textContent = titleText || "Add photos";
@@ -318,6 +405,7 @@
                 syncingMessage.id = "sync-status";
                 syncingMessage.textContent = "Syncing new photos…";
                 container.appendChild(syncingMessage);
+                const progressMeter = createProgressMeter(container);
                 addButtonLocked = false;
                 updateSelectionButtons();
                 pollSyncProgress({
@@ -327,14 +415,17 @@
                     if (!statusEl) return;
                     if (total_steps === 0) {
                       statusEl.textContent = "No sync needed.";
+                      progressMeter.update(100);
                       return;
                     }
                     const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
+                    progressMeter.update(percent);
                     statusEl.textContent = failed_count > 0
                       ? `Sync completed with ${failed_count} failure(s).`
                       : `Syncing new photos… ${percent}%`;
                   },
                   onComplete: (status) => {
+                    progressMeter.update(100);
                     const statusEl = document.getElementById("sync-status");
                     if (statusEl && status.failed_count === 0) {
                       statusEl.textContent = "Sync complete. Refreshing album…";
@@ -579,20 +670,24 @@
           statusEl.textContent = "Removing photos…";
           sessionModalBody.innerHTML = "";
           sessionModalBody.appendChild(statusEl);
+          const progressMeter = createProgressMeter(sessionModalBody);
 
           pollSyncProgress({
             onUpdate: (status) => {
               const { total_steps, current_step, failed_count } = status;
               if (total_steps === 0) {
                 statusEl.textContent = "No removal needed.";
+                progressMeter.update(100);
                 return;
               }
               const percent = total_steps ? Math.floor((current_step / total_steps) * 100) : 100;
+              progressMeter.update(percent);
               statusEl.textContent = failed_count > 0
                 ? `Removal completed with ${failed_count} failure(s).`
                 : `Removing photos… ${percent}%`;
             },
             onComplete: (status) => {
+              progressMeter.update(100);
               selectedIds.clear();
               persistSelections(selectedIds);
               addButtonLocked = false;
