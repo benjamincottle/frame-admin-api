@@ -137,6 +137,7 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
             .expect("response is ok")
             .into_body()
             .read_json::<OAuthCreds>()?;
+        oauth_creds.refresh_token = user.credentials.refresh_token.clone();
         let expires_in = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
@@ -161,6 +162,7 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
             .credentials
             .token_type
             .clone_from(&oauth_creds.token_type);
+        user_to_update.credentials.refresh_token = oauth_creds.refresh_token.clone();
         user_to_update.updatedAt = Utc::now();
         drop(user_db);
         app_data.save("secrets/");
@@ -255,15 +257,37 @@ impl ValidUser {
 
         match decode {
             Ok(token) => {
-                let user_db = app_data.db.lock().unwrap();
-                let user = user_db.iter().find(|user| user.id == token.claims.sub);
-                if user.is_none() {
+                let user_opt = {
+                    let user_db = app_data.db.lock().unwrap();
+                    user_db.iter().find(|user| user.id == token.claims.sub).cloned()
+                };
+                if user_opt.is_none() {
                     log::warn!("user belonging to this token no longer exists");
                     return Err(AuthError::InvalidToken);
                 }
+                let mut user = user_opt.expect("user is some");
+                let now_secs = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("Time went backwards")
+                    .as_secs();
+                let needs_refresh = now_secs + 60 > user.credentials.expires_in;
+                if needs_refresh {
+                    if user.credentials.refresh_token.is_some() {
+                        match refresh_token(app_data, &user) {
+                            Ok(updated_creds) => {
+                                user.credentials = updated_creds;
+                            }
+                            Err(e) => {
+                                log::warn!("(auth) token refresh failed: {:?}", e);
+                            }
+                        }
+                    } else {
+                        log::warn!("(auth) token expiring but no refresh token available");
+                    }
+                }
 
                 Ok(ValidUser {
-                    user: user.expect("user is some").clone(),
+                    user,
                 })
             }
             Err(_) => {
