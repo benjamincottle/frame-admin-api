@@ -8,7 +8,7 @@ use crate::{
     gphotos_api::{MediaItem, MediaMetadata, PickedMediaItem, PickingSession, get_photo},
     image_proc::{decode_image, encode_image},
     model::{AppState, TokenClaims},
-    session_mgr::{SESSION_MGR, SessionID},
+    session_mgr::SESSION_MGR,
     task_mgr::{Action, Status, TASK_BOARD, Task, TaskData, TaskQueue},
     template_mgr::TEMPLATES,
 };
@@ -134,36 +134,40 @@ fn handle_oauth_login(
     app_data: AppState,
     request: Request,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(e) = SESSION_MGR.get_session_id(&request).err() {
-        log::info!("(handle_login) session error: {:?}", e);
-        let next_uri = request
-            .headers()
-            .iter()
-            .find(|header| header.field.equiv("Referer"))
-            .map(|h| h.value.as_str())
-            .or(Some("/frame_admin"))
-            .expect("next_uri is now some");
-        let session_id: SessionID = SESSION_MGR.create_session();
-        SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
-        let env = app_data.env.lock().unwrap();
-        let jwt_max_age = env.jwt_max_age;
-        drop(env);
-        let mut response = Response::empty(tiny_http::StatusCode(302));
-        response
-            .add_header(Header::from_str("Location: authorise").expect("This should never fail"));
-        response.add_header(
-            Header::from_str(&format!(
-                "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
-                session_id,
-                jwt_max_age
-            ))
-            .expect("This should never fail"),
+    let next_uri = request
+        .headers()
+        .iter()
+        .find(|header| header.field.equiv("Referer"))
+        .map(|h| h.value.as_str())
+        .or(Some("/frame_admin"))
+        .expect("next_uri is now some");
+    let (session_id, session_err) = match SESSION_MGR.get_session_id(&request) {
+        Ok(session_id) => (session_id, None),
+        Err(e) => {
+            log::info!("(handle_login) session error: {:?}", e);
+            (SESSION_MGR.create_session(), Some(e))
+        }
+    };
+    SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
+    let env = app_data.env.lock().unwrap();
+    let jwt_max_age = env.jwt_max_age;
+    drop(env);
+    let mut response = Response::empty(tiny_http::StatusCode(302));
+    response.add_header(Header::from_str("Location: authorise").expect("This should never fail"));
+    response.add_header(
+        Header::from_str(&format!(
+            "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
+            session_id, jwt_max_age
+        ))
+        .expect("This should never fail"),
+    );
+    if let Some(e) = session_err {
+        log::debug!(
+            "(handle_login) proceeding with new session after error: {:?}",
+            e
         );
-        dispatch_response(request, response);
-        return Ok(());
     }
-    log::error!("(handle login) user logged out but session exists");
-    serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+    dispatch_response(request, response);
     Ok(())
 }
 
