@@ -1,5 +1,5 @@
 use lazy_static::lazy_static;
-use rand::{Rng, distr::Alphanumeric};
+use rand::{RngExt, distr::Alphanumeric};
 use std::{
     collections::HashMap,
     sync::Mutex,
@@ -102,7 +102,7 @@ pub enum SessionError {
 
 type Key = String;
 type Value = String;
-pub type SessionID = String;
+type SessionID = String;
 
 #[derive(Clone)]
 struct Session {
