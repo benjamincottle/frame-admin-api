@@ -469,7 +469,16 @@
         console.error("Error:", error);
         addButtonLocked = false;
         updateSelectionButtons();
-        closeSessionModal();
+        // Keep the modal open and tell the user what happened rather than
+        // closing silently with no feedback.
+        container.innerHTML = "";
+        const errMsg = document.createElement("div");
+        errMsg.textContent = "Couldn't start a picking session. Please try again.";
+        container.appendChild(errMsg);
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close";
+        closeBtn.addEventListener("click", closeSessionModal);
+        container.appendChild(closeBtn);
       });
   };
 
@@ -621,6 +630,7 @@
       updateSelectionButtons();
     }
 
+    let albumLoadController = null;
     function loadAlbum(page, opts = {}) {
       const { onComplete } = opts;
       const newSize = computePageSizeFromGrid();
@@ -628,8 +638,14 @@
         pageSize = newSize;
         page = 1;
       }
+      // Cancel any album load still in flight so rapid paging can't let a stale
+      // response overwrite the latest page.
+      if (albumLoadController) albumLoadController.abort();
+      albumLoadController = new AbortController();
       setLoading(true);
-      fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`)
+      fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`, {
+        signal: albumLoadController.signal
+      })
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -638,6 +654,7 @@
           render(data.items || [], data.page || 1, data.total || 0, data.pageSize || PAGE_SIZE);
         })
         .catch(err => {
+          if (err.name === "AbortError") return;
           console.error("Album load error:", err);
           errorBox.textContent = "Failed to load album.";
           grid.innerHTML = "";
@@ -721,6 +738,7 @@
 
     removeBtn.addEventListener("click", () => {
       if (!selectedIds.size) return;
+      if (!window.confirm(`Remove ${selectedIds.size} photo(s)? This cannot be undone.`)) return;
       startDeleteFlow(Array.from(selectedIds));
     });
 

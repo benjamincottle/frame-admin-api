@@ -359,13 +359,20 @@
         })
         .on('dblclick', 'td', function() {
           var cellData = table.cell(this).data();
-          var tempInput = document.createElement("input");
-          tempInput.style = "position: absolute; left: -1000px; top: -1000px";
-          tempInput.value = cellData;
-          document.body.appendChild(tempInput);
-          tempInput.select();
-          document.execCommand("copy");
-          document.body.removeChild(tempInput);
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(String(cellData)).catch(function(err) {
+              console.error("Clipboard write failed:", err);
+            });
+          } else {
+            // Fallback for non-secure contexts without the async Clipboard API.
+            var tempInput = document.createElement("input");
+            tempInput.style = "position: absolute; left: -1000px; top: -1000px";
+            tempInput.value = cellData;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand("copy");
+            document.body.removeChild(tempInput);
+          }
           var notice = document.createElement("div");
           var x = event.pageX - 20;
           var y = event.pageY - 50;

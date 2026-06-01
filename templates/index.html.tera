@@ -8,13 +8,36 @@
         padding-top: 64px;
         margin: 0px;
         display: flex;
-        flex-direction: row;
-        justify-content: center;
-      }   
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+      }
       #p_dog_svg {
         opacity: 0.1;
         width: 440px;
         height: 380px;
+      }
+      .p_login_btn {
+        cursor: pointer;
+        display: inline-block;
+        padding: 10px 22px;
+        background-color: var(--button-background);
+        color: var(--button-text);
+        text-decoration: none;
+        border-radius: 6px;
+        font-size: 16px;
+      }
+      .p_login_btn:hover {
+        opacity: 0.85;
+      }
+      .p_error {
+        color: #f5b5b5;
+        background: rgba(180, 50, 50, 0.18);
+        border: 1px solid #9b3b3b;
+        border-radius: 6px;
+        padding: 10px 16px;
+        max-width: 420px;
+        text-align: center;
       }
     </style>
 {% endblock head %}
@@ -26,6 +49,10 @@
                 <use id="p_dog_path" xlink:href="#l_dog_path"/>
               </g>
             </svg>
+            {% if error %}
+            <p class="p_error">{{ error }}</p>
+            {% endif %}
             <p>Login to continue.</p>
+            <a class="p_login_btn" href="{{ url_for(name='login') }}">Sign in with Google</a>
           </div>
 {% endblock content %}
