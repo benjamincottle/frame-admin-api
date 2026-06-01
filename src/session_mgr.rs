@@ -34,6 +34,10 @@ impl SESSION_MGR {
 
     pub fn get_session_id(&self, request: &Request) -> Result<SessionID, SessionError> {
         let mut session_mgr = self.lock().unwrap();
+        // Drop abandoned sessions on access so the in-memory map can't grow without
+        // bound between the periodic cleanups in create_session.
+        let now = SystemTime::now();
+        session_mgr.sessions.retain(|_, session| session.expires > now);
         let cookie = request
             .headers()
             .iter()

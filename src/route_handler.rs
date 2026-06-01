@@ -88,7 +88,7 @@ pub fn route_request(app_data: AppState, request: Request) {
             };
         }
         "oauth_logout" => {
-            handle_oauth_logout(request, auth_guard);
+            handle_oauth_logout(app_data, request);
         }
         "oauth_authorise" => {
             handle_oauth_authorise(app_data, request);
@@ -138,9 +138,8 @@ fn handle_oauth_login(
         .headers()
         .iter()
         .find(|header| header.field.equiv("Referer"))
-        .map(|h| h.value.as_str())
-        .or(Some("/frame_admin"))
-        .expect("next_uri is now some");
+        .map(|h| safe_next_uri(h.value.as_str()))
+        .unwrap_or_else(|| "/frame_admin/monitor".to_string());
     let (session_id, session_err) = match SESSION_MGR.get_session_id(&request) {
         Ok(session_id) => (session_id, None),
         Err(e) => {
@@ -148,19 +147,20 @@ fn handle_oauth_login(
             (SESSION_MGR.create_session(), Some(e))
         }
     };
-    SESSION_MGR.set_session_data(&session_id, "next_uri", next_uri);
+    SESSION_MGR.set_session_data(&session_id, "next_uri", &next_uri);
     let env = app_data.env.lock().unwrap();
     let jwt_max_age = env.jwt_max_age;
+    let cookie_secure = env.cookie_secure;
     drop(env);
     let mut response = Response::empty(tiny_http::StatusCode(302));
     response.add_header(Header::from_str("Location: authorise").expect("This should never fail"));
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: session={}; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
-            session_id, jwt_max_age
-        ))
-        .expect("This should never fail"),
-    );
+    response.add_header(set_cookie_header(
+        "session",
+        &session_id,
+        "/frame_admin/oauth",
+        jwt_max_age,
+        cookie_secure,
+    ));
     if let Some(e) = session_err {
         log::debug!(
             "(handle_login) proceeding with new session after error: {:?}",
@@ -171,24 +171,19 @@ fn handle_oauth_login(
     Ok(())
 }
 
-fn handle_oauth_logout(request: Request, auth_guard: AuthGuard<ValidUser>) {
+fn handle_oauth_logout(app_data: AppState, request: Request) {
+    // Always clear the auth cookies, even when the current token is missing or
+    // expired, so a user with a stale session can still log out cleanly.
+    let cookie_secure = app_data.env.lock().unwrap().cookie_secure;
     let mut response = Response::empty(tiny_http::StatusCode(302));
-    if auth_guard.is_ok() {
-        response.add_header(
-            Header::from_str(&format!(
-                "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-                Duration::seconds(-1)
-            ))
-            .expect("This should never fail"),
-        );
-        response.add_header(
-            Header::from_str(&format!(
-                "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
-                Duration::seconds(-1)
-            ))
-            .expect("This should never fail"),
-        );
-    };
+    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure));
+    response.add_header(set_cookie_header(
+        "session",
+        "",
+        "/frame_admin/oauth",
+        -1,
+        cookie_secure,
+    ));
     response
         .add_header(Header::from_str("Location: /frame_admin").expect("This should never fail"));
     dispatch_response(request, response);
@@ -238,40 +233,52 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
             return;
         }
     };
-    let session_state = SESSION_MGR
-        .get_session_data(&session_id, "state")
-        .expect("We should have a state in the session");
-    let session_next_uri = SESSION_MGR
-        .get_session_data(&session_id, "next_uri")
-        .expect("We should have a next_uri in the session");
+    // The state is set during /oauth/authorise; if it's absent the callback was
+    // reached out of order. Redirect to login rather than panicking the worker.
+    let session_state = match SESSION_MGR.get_session_data(&session_id, "state") {
+        Some(state) => state,
+        None => {
+            log::warn!("(handle_oauth_google) no state in session; restarting login");
+            redirect_to(request, "/frame_admin/oauth/login");
+            return;
+        }
+    };
+    let session_next_uri = safe_next_uri(
+        &SESSION_MGR
+            .get_session_data(&session_id, "next_uri")
+            .unwrap_or_default(),
+    );
     let params = extract_params(request.url());
     let state = params.get("state");
     let code = params.get("code");
     let error = params.get("error");
     if error.is_some() || state != Some(&session_state) || code.is_none() {
         log::error!("oauth2 error or state mismatch or code not found");
-        serve_error(
-            request,
-            tiny_http::StatusCode(403),
-            "Unauthorised: oauth2 error",
-        );
+        redirect_to(request, "/frame_admin?error=oauth");
         return;
     }
     let code = code.expect("Code should be present");
     let token_response = request_token(&app_data, code.as_str());
-    if token_response.is_err() {
-        let message = token_response
-            .expect_err("token_response is err")
-            .to_string();
-        log::error!("oauth2 error: {}", message);
-        serve_error(request, tiny_http::StatusCode(502), "Bad Gateway");
-        return;
-    }
-    let user_id = token_response.expect("token_response is not err");
+    let user_id = match token_response {
+        Ok(user_id) => user_id,
+        Err(e) => {
+            let message = e.to_string();
+            log::error!("oauth2 error: {}", message);
+            // Distinguish "you may not sign in" from a backend failure so the
+            // login page can show a meaningful message.
+            if message.contains("not authorised") {
+                redirect_to(request, "/frame_admin?error=unauthorised");
+            } else {
+                redirect_to(request, "/frame_admin?error=oauth");
+            }
+            return;
+        }
+    };
     let current_datetime = Utc::now();
     let env = app_data.env.lock().unwrap();
     let jwt_secret = env.jwt_secret.to_owned();
     let jwt_max_age = env.jwt_max_age;
+    let cookie_secure = env.cookie_secure;
     drop(env);
     let iat = current_datetime.timestamp() as usize;
     let exp = (current_datetime + Duration::seconds(jwt_max_age)).timestamp() as usize;
@@ -287,15 +294,15 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
     )
     .expect("can't encode token");
     let mut response = Response::empty(tiny_http::StatusCode(302));
+    response.add_header(set_cookie_header(
+        "token",
+        &token,
+        "/",
+        jwt_max_age,
+        cookie_secure,
+    ));
     response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: token={}; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            token, jwt_max_age
-        ))
-        .expect("This should never fail"),
-    );
-    response.add_header(
-        tiny_http::Header::from_bytes(&b"Location"[..], &session_next_uri[..])
+        tiny_http::Header::from_bytes(&b"Location"[..], session_next_uri.as_bytes())
             .expect("This should never fail"),
     );
     dispatch_response(request, response);
@@ -305,15 +312,11 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
     let auth_guard = match auth_guard {
         Ok(auth_guard) => auth_guard,
         Err(_) => {
-            let mut response = Response::empty(tiny_http::StatusCode(302));
-            response.add_header(
-                tiny_http::Header::from_bytes(&b"Location"[..], "/frame_admin/oauth/login")
-                    .expect("This should never fail"),
-            );
-            dispatch_response(request, response);
+            redirect_to(request, "/frame_admin/oauth/login");
             return;
         }
     };
+    let cookie_secure = app_data.env.lock().unwrap().cookie_secure;
     let mut response = match revoke_token(&app_data, &auth_guard.user) {
         Ok(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
@@ -333,20 +336,14 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             return;
         }
     };
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: token=; Path=/; Max-Age={}; HttpOnly; SameSite=Lax;",
-            Duration::seconds(-1)
-        ))
-        .expect("This should never fail"),
-    );
-    response.add_header(
-        Header::from_str(&format!(
-            "Set-Cookie: session=; Path=/frame_admin/oauth; Max-Age={}; HttpOnly; SameSite=Lax;",
-            Duration::seconds(-1)
-        ))
-        .expect("This should never fail"),
-    );
+    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure));
+    response.add_header(set_cookie_header(
+        "session",
+        "",
+        "/frame_admin/oauth",
+        -1,
+        cookie_secure,
+    ));
     dispatch_response(request, response);
 }
 
@@ -363,7 +360,22 @@ fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<Vali
             dispatch_response(request, response);
             return;
         }
-        Err(_) => Context::new(),
+        Err(_) => {
+            let mut context = Context::new();
+            // Surface a friendly reason when the user was bounced back from a failed
+            // login (e.g. an unauthorised email or an OAuth error).
+            if let Some(error) = extract_params(request.url()).get("error") {
+                let message = match error.as_str() {
+                    "unauthorised" => {
+                        "Your account is not authorised to access this application."
+                    }
+                    "oauth" => "Sign-in failed. Please try again.",
+                    _ => "Sign-in failed. Please try again.",
+                };
+                context.insert("error", message);
+            }
+            context
+        }
     };
     let rendered = TEMPLATES.render("index.html.tera", &context);
     let response = Response::from_data(rendered);
@@ -1102,6 +1114,42 @@ fn extract_params(url: &str) -> HashMap<String, String> {
         })
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect()
+}
+
+/// Send a 302 redirect to an internal path.
+fn redirect_to(request: Request, location: &str) {
+    let mut response = Response::empty(tiny_http::StatusCode(302));
+    response.add_header(
+        tiny_http::Header::from_bytes(&b"Location"[..], location.as_bytes())
+            .expect("This should never fail"),
+    );
+    dispatch_response(request, response);
+}
+
+/// Validate a post-login redirect target. Only same-origin absolute paths are
+/// allowed, preventing an attacker-controlled `Referer` from redirecting users
+/// off-site after authentication. Anything else falls back to the monitor page.
+fn safe_next_uri(candidate: &str) -> String {
+    let trimmed = candidate.trim();
+    if trimmed.starts_with('/')
+        && !trimmed.starts_with("//")
+        && !trimmed.contains(':')
+        && !trimmed.contains('\\')
+    {
+        trimmed.to_string()
+    } else {
+        "/frame_admin/monitor".to_string()
+    }
+}
+
+/// Build a `Set-Cookie` header, appending `Secure` when configured. Centralises the
+/// cookie attributes so login/logout/callback/revoke stay consistent.
+fn set_cookie_header(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> Header {
+    let secure_attr = if secure { " Secure;" } else { "" };
+    Header::from_str(&format!(
+        "Set-Cookie: {name}={value}; Path={path}; Max-Age={max_age}; HttpOnly; SameSite=Lax;{secure_attr}"
+    ))
+    .expect("This should never fail")
 }
 
 fn serve_static_file(request: Request) {

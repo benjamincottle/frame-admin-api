@@ -197,9 +197,11 @@
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
+    <button id="album-first" disabled>First</button>
     <button id="album-prev" disabled>Prev</button>
     <span id="album-page-info"></span>
     <button id="album-next">Next</button>
+    <button id="album-last">Last</button>
   </div>
   <div id="album-error" aria-live="polite"></div>
 </div>
@@ -467,7 +469,16 @@
         console.error("Error:", error);
         addButtonLocked = false;
         updateSelectionButtons();
-        closeSessionModal();
+        // Keep the modal open and tell the user what happened rather than
+        // closing silently with no feedback.
+        container.innerHTML = "";
+        const errMsg = document.createElement("div");
+        errMsg.textContent = "Couldn't start a picking session. Please try again.";
+        container.appendChild(errMsg);
+        const closeBtn = document.createElement("button");
+        closeBtn.textContent = "Close";
+        closeBtn.addEventListener("click", closeSessionModal);
+        container.appendChild(closeBtn);
       });
   };
 
@@ -482,8 +493,10 @@
     const STORAGE_KEY = "frame-admin-album-selected";
     const grid = document.getElementById("album-grid");
     const pageInfo = document.getElementById("album-page-info");
+    const firstBtn = document.getElementById("album-first");
     const prevBtn = document.getElementById("album-prev");
     const nextBtn = document.getElementById("album-next");
+    const lastBtn = document.getElementById("album-last");
     const errorBox = document.getElementById("album-error");
 
     function computePageSizeFromGrid() {
@@ -610,11 +623,14 @@
         });
       }
       pageInfo.textContent = `Page ${page} of ${pages}`;
+      firstBtn.disabled = page <= 1;
       prevBtn.disabled = page <= 1;
       nextBtn.disabled = page >= pages;
+      lastBtn.disabled = page >= pages;
       updateSelectionButtons();
     }
 
+    let albumLoadController = null;
     function loadAlbum(page, opts = {}) {
       const { onComplete } = opts;
       const newSize = computePageSizeFromGrid();
@@ -622,8 +638,14 @@
         pageSize = newSize;
         page = 1;
       }
+      // Cancel any album load still in flight so rapid paging can't let a stale
+      // response overwrite the latest page.
+      if (albumLoadController) albumLoadController.abort();
+      albumLoadController = new AbortController();
       setLoading(true);
-      fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`)
+      fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`, {
+        signal: albumLoadController.signal
+      })
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
@@ -632,6 +654,7 @@
           render(data.items || [], data.page || 1, data.total || 0, data.pageSize || PAGE_SIZE);
         })
         .catch(err => {
+          if (err.name === "AbortError") return;
           console.error("Album load error:", err);
           errorBox.textContent = "Failed to load album.";
           grid.innerHTML = "";
@@ -641,11 +664,17 @@
         });
     }
 
+    firstBtn.addEventListener("click", () => {
+      if (currentPage > 1) loadAlbum(1);
+    });
     prevBtn.addEventListener("click", () => {
       if (currentPage > 1) loadAlbum(currentPage - 1);
     });
     nextBtn.addEventListener("click", () => {
       if (currentPage < totalPages) loadAlbum(currentPage + 1);
+    });
+    lastBtn.addEventListener("click", () => {
+      if (currentPage < totalPages) loadAlbum(totalPages);
     });
 
     function startDeleteFlow(photoIds) {
@@ -709,6 +738,7 @@
 
     removeBtn.addEventListener("click", () => {
       if (!selectedIds.size) return;
+      if (!window.confirm(`Remove ${selectedIds.size} photo(s)? This cannot be undone.`)) return;
       startDeleteFlow(Array.from(selectedIds));
     });
 

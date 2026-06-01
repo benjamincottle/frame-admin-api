@@ -55,9 +55,25 @@ pub fn request_token(
             .parse::<TokenClaims>(&oauth_creds.id_token.clone().expect("id_token is some"))
             .expect("couldn't parse jwt token");
         let google_user = get_google_user(&oauth_creds.access_token)?;
-        let mut user_db = app_data.db.lock().unwrap();
         let email = google_user.email.to_lowercase();
+        let allowed_emails = {
+            let env = app_data.env.lock().unwrap();
+            env.allowed_emails.clone()
+        };
+        let mut user_db = app_data.db.lock().unwrap();
         let user = user_db.iter_mut().find(|user| user.email == email);
+        // Access control: an explicit allowlist gates who may sign in. When the
+        // allowlist is empty we fall back to allowing only pre-existing users so an
+        // unconfigured deployment can't be hijacked by open self-registration.
+        if allowed_emails.is_empty() {
+            if user.is_none() {
+                log::warn!("(request_token) sign-in blocked: empty allowlist and no existing user for {email}");
+                return Err(From::from("email not authorised"));
+            }
+        } else if !allowed_emails.contains(&email) {
+            log::warn!("(request_token) sign-in blocked: {email} not in allowlist");
+            return Err(From::from("email not authorised"));
+        }
         let current_datetime = Utc::now();
         let expires_in = SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -11,6 +11,10 @@ pub struct Config {
     pub google_oauth_client_id: String,
     pub google_oauth_client_secret: String,
     pub google_oauth_redirect_url: String,
+    #[serde(default)]
+    pub allowed_emails: Vec<String>,
+    #[serde(default)]
+    pub cookie_secure: bool,
 }
 
 impl Config {
@@ -39,6 +43,15 @@ impl Config {
                         .expect("GOOGLE_OAUTH_CLIENT_SECRET not set"),
                     google_oauth_redirect_url: env::var("GOOGLE_OAUTH_REDIRECT_URI")
                         .expect("GOOGLE_OAUTH_REDIRECT_URI not set"),
+                    allowed_emails: env::var("ALLOWED_EMAILS")
+                        .unwrap_or_default()
+                        .split(',')
+                        .map(|e| e.trim().to_lowercase())
+                        .filter(|e| !e.is_empty())
+                        .collect(),
+                    cookie_secure: env::var("COOKIE_SECURE")
+                        .map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes"))
+                        .unwrap_or(false),
                 }
             }
         }
