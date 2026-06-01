@@ -197,9 +197,11 @@
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
+    <button id="album-first" disabled>First</button>
     <button id="album-prev" disabled>Prev</button>
     <span id="album-page-info"></span>
     <button id="album-next">Next</button>
+    <button id="album-last">Last</button>
   </div>
   <div id="album-error" aria-live="polite"></div>
 </div>
@@ -482,8 +484,10 @@
     const STORAGE_KEY = "frame-admin-album-selected";
     const grid = document.getElementById("album-grid");
     const pageInfo = document.getElementById("album-page-info");
+    const firstBtn = document.getElementById("album-first");
     const prevBtn = document.getElementById("album-prev");
     const nextBtn = document.getElementById("album-next");
+    const lastBtn = document.getElementById("album-last");
     const errorBox = document.getElementById("album-error");
 
     function computePageSizeFromGrid() {
@@ -610,8 +614,10 @@
         });
       }
       pageInfo.textContent = `Page ${page} of ${pages}`;
+      firstBtn.disabled = page <= 1;
       prevBtn.disabled = page <= 1;
       nextBtn.disabled = page >= pages;
+      lastBtn.disabled = page >= pages;
       updateSelectionButtons();
     }
 
@@ -641,11 +647,17 @@
         });
     }
 
+    firstBtn.addEventListener("click", () => {
+      if (currentPage > 1) loadAlbum(1);
+    });
     prevBtn.addEventListener("click", () => {
       if (currentPage > 1) loadAlbum(currentPage - 1);
     });
     nextBtn.addEventListener("click", () => {
       if (currentPage < totalPages) loadAlbum(currentPage + 1);
+    });
+    lastBtn.addEventListener("click", () => {
+      if (currentPage < totalPages) loadAlbum(totalPages);
     });
 
     function startDeleteFlow(photoIds) {
