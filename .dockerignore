@@ -1,0 +1,5 @@
+target/
+deploy.sh
+secrets/
+.git/
+.gitignore
