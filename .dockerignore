@@ -3,3 +3,5 @@ deploy.sh
 secrets/
 .git/
 .gitignore
+Dockerfile
+.dockerignore

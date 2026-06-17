@@ -807,6 +807,7 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
 
     let mut context = Context::new();
     context.insert("is_authenticated", &true);
+    context.insert("current_page", "manage");
     let rendered = TEMPLATES.render("manage.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);
@@ -959,6 +960,7 @@ fn handle_monitor(request: Request, auth_guard: AuthGuard<ValidUser>) {
     };
     let mut context = Context::new();
     context.insert("is_authenticated", &true);
+    context.insert("current_page", "monitor");
     let rendered = TEMPLATES.render("monitor.html.tera", &context);
     let response = Response::from_data(rendered);
     dispatch_response(request, response);

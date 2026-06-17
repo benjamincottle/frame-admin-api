@@ -6,14 +6,27 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.1/qrcode.js" referrerpolicy="no-referrer"></script>
   <style>
     #title_head {
-      margin-left: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 16px 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #title_head h1 {
+      margin: 0;
+      margin-right: auto;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--text-colour-highlight);
     }
     .pickerLink {
       display: block;
       margin-bottom: 10px;
-      font-size: 18px;
-      font-weight: bold;
-      color: #1a73e8;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--accent);
       text-decoration: none;
     }
     .pickerLink:hover {
@@ -22,23 +35,8 @@
     canvas {
       margin-bottom: 10px;
     }
-    button {
-      display: block;
-      background-color: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    #create-session-btn,
-    #remove-selected-btn {
-      margin-bottom: 12px;
-    }
-    button:hover {
-      background-color: #1669c1;
-    }
     #photo-album {
-      margin: 32px auto;
+      margin: 24px auto;
       max-width: 1200px;
       padding: 0 16px;
     }
@@ -55,28 +53,32 @@
       display: flex;
     }
     #session-modal .modal-card {
-      background: var(--background-colour);
-      border-radius: 8px;
-      padding: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
       max-width: 520px;
       width: min(90vw, 520px);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+      box-shadow: var(--shadow);
     }
     #session-modal .modal-card h2 {
-      margin: 0 0 12px 0;
-      font-size: 20px;
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--text-colour-highlight);
     }
     #session-modal .modal-body {
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+      justify-content: flex-end;
     }
     #remove-selected-btn {
       display: none;
-      background-color: #c62828;
-    }
-    #remove-selected-btn:hover {
-      background-color: #a71f1f;
     }
     #album-grid {
       display: grid;
@@ -86,22 +88,18 @@
       column-gap: 14px;
       row-gap: 14px;
     }
-    #album-pagination button:disabled {
-      opacity: 0.55;
-      cursor: not-allowed;
-    }
     .album-card {
-      border: 1px solid #e0e0e0;
-      border-radius: 6px;
-      padding: 6px;
-      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      background: var(--surface-2);
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       position: relative;
       overflow: hidden;
-      transition: box-shadow 0.15s ease, transform 0.15s ease;
+      transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
       width: 100%;
     }
     .album-card::after {
@@ -114,10 +112,13 @@
       pointer-events: none;
       z-index: 1;
     }
-    .album-card:hover,
-    .album-card.selected {
-      box-shadow: 0 8px 18px rgba(0, 0, 0, 0.12);
+    .album-card:hover {
+      box-shadow: var(--shadow);
       transform: translateY(-1px);
+    }
+    .album-card.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent);
     }
     .album-card:hover::after,
     .album-card.selected::after {
@@ -127,27 +128,32 @@
       width: 100%;
       height: 140px;
       object-fit: cover;
-      border-radius: 4px;
-      background: #ddd;
+      border-radius: var(--radius-sm);
+      background: var(--background-colour);
+    }
+    .album-card a {
+      color: var(--accent);
+      position: relative;
+      z-index: 2;
     }
     .album-select-checkbox {
       position: absolute;
       top: 10px;
       right: 10px;
-      display: none;
       z-index: 2;
       width: 18px;
       height: 18px;
       cursor: pointer;
-      accent-color: #1a73e8;
+      accent-color: var(--accent);
     }
-    .album-card:hover .album-select-checkbox,
-    .album-card.selected .album-select-checkbox {
-      display: block;
+    .album-card .meta {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
     }
-    .album-card .meta { font-size: 12px; color: #555; }
     #album-pagination { margin-top: 24px; display: flex; gap: 8px; align-items: center; }
-    #album-error { margin-top: 8px; color: #c00; font-size: 14px; }
+    #album-page-info { color: var(--text-muted); font-size: 14px; }
+    #album-error { margin-top: 8px; color: var(--danger); font-size: 14px; }
     .sync-meter {
       display: inline-flex;
       align-items: center;
@@ -190,18 +196,18 @@
   <div id="title_head">
     <h1>Manage</h1>
 
-    <button id="create-session-btn">Add photos</button>
-    <button id="remove-selected-btn">Remove selected images</button>
+    <button id="create-session-btn" class="btn btn-primary">Add photos</button>
+    <button id="remove-selected-btn" class="btn btn-danger">Remove selected images</button>
   </div>
 
   <div id="photo-album">
   <div id="album-grid"></div>
   <div id="album-pagination">
-    <button id="album-first" disabled>First</button>
-    <button id="album-prev" disabled>Prev</button>
+    <button id="album-first" class="btn" disabled>First</button>
+    <button id="album-prev" class="btn" disabled>Prev</button>
     <span id="album-page-info"></span>
-    <button id="album-next">Next</button>
-    <button id="album-last">Last</button>
+    <button id="album-next" class="btn">Next</button>
+    <button id="album-last" class="btn">Last</button>
   </div>
   <div id="album-error" aria-live="polite"></div>
 </div>
@@ -360,6 +366,7 @@
 
         const deleteButton = document.createElement("button");
         deleteButton.textContent = "Cancel";
+        deleteButton.className = "btn";
         deleteButton.addEventListener("click", () => {
           if (pollInterval) clearInterval(pollInterval);
           fetch("/frame_admin/manage", {
@@ -445,6 +452,7 @@
                 updateSelectionButtons();
                 const closeBtn = document.createElement("button");
                 closeBtn.textContent = "Close";
+                closeBtn.className = "btn";
                 closeBtn.addEventListener("click", closeSessionModal);
                 container.appendChild(closeBtn);
               } else {
@@ -477,6 +485,7 @@
         container.appendChild(errMsg);
         const closeBtn = document.createElement("button");
         closeBtn.textContent = "Close";
+        closeBtn.className = "btn";
         closeBtn.addEventListener("click", closeSessionModal);
         container.appendChild(closeBtn);
       });
@@ -736,10 +745,32 @@
         });
     }
 
+    function confirmRemoval(count, onConfirm) {
+      openSessionModal("", "Remove photos");
+      sessionModalBody.innerHTML = "";
+      const message = document.createElement("div");
+      message.textContent = `Remove ${count} photo(s)? This cannot be undone.`;
+      sessionModalBody.appendChild(message);
+      const actions = document.createElement("div");
+      actions.className = "modal-actions";
+      const cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancel";
+      cancelBtn.className = "btn";
+      cancelBtn.addEventListener("click", closeSessionModal);
+      const confirmBtn = document.createElement("button");
+      confirmBtn.textContent = "Remove";
+      confirmBtn.className = "btn btn-danger";
+      confirmBtn.addEventListener("click", onConfirm);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(confirmBtn);
+      sessionModalBody.appendChild(actions);
+    }
+
     removeBtn.addEventListener("click", () => {
       if (!selectedIds.size) return;
-      if (!window.confirm(`Remove ${selectedIds.size} photo(s)? This cannot be undone.`)) return;
-      startDeleteFlow(Array.from(selectedIds));
+      confirmRemoval(selectedIds.size, () => {
+        startDeleteFlow(Array.from(selectedIds));
+      });
     });
 
     document.addEventListener("DOMContentLoaded", () => {

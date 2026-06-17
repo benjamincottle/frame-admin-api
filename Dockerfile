@@ -17,6 +17,8 @@ ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc \
 WORKDIR /app
 COPY . .
 
+RUN mkdir -p /app/secrets
+
 # Bring in the target architecture variable automatically supplied by Buildx
 ARG TARGETARCH
 
@@ -31,13 +33,14 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 
 # --- Final Stage ---
 # This automatically pulls the matching debian image for the target platform
-FROM debian:trixie-slim
+FROM gcr.io/distroless/cc-debian13
 WORKDIR /app
 
 # Copy the correctly built binary from the temporary location
 COPY --from=builder /app/admin_api-final /app/admin_api
 COPY public/ /app/public/
 COPY templates/ /app/templates/
-RUN mkdir -p /app/secrets
+COPY --from=builder /app/secrets/ /app/secrets/
+
 EXPOSE 5000
 CMD ["./admin_api"]

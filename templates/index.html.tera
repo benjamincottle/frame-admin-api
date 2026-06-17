@@ -5,38 +5,54 @@
     <style type="text/css">
       .p_layout {
         width: 100%;
-        padding-top: 64px;
+        padding: 64px 16px;
         margin: 0px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 16px;
+      }
+      .p_card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        width: min(92vw, 420px);
+        padding: 36px 32px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        text-align: center;
       }
       #p_dog_svg {
-        opacity: 0.1;
-        width: 440px;
-        height: 380px;
+        opacity: 0.85;
+        width: 96px;
+        height: 84px;
+      }
+      .p_title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-colour-highlight);
+      }
+      .p_subtitle {
+        margin: 0;
+        color: var(--text-muted);
       }
       .p_login_btn {
-        cursor: pointer;
-        display: inline-block;
-        padding: 10px 22px;
-        background-color: var(--button-background);
-        color: var(--button-text);
+        height: 44px;
+        padding: 0 24px;
+        font-size: 15px;
+        width: 100%;
         text-decoration: none;
-        border-radius: 6px;
-        font-size: 16px;
-      }
-      .p_login_btn:hover {
-        opacity: 0.85;
       }
       .p_error {
         color: #f5b5b5;
         background: rgba(180, 50, 50, 0.18);
         border: 1px solid #9b3b3b;
-        border-radius: 6px;
+        border-radius: var(--radius-sm);
         padding: 10px 16px;
-        max-width: 420px;
+        width: 100%;
         text-align: center;
       }
     </style>
@@ -44,15 +60,18 @@
 
 {% block content %}
           <div class="p_layout">
-            <svg id="p_dog_svg" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet">
-              <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill=var(--fp-dog-fill) stroke="none">
-                <use id="p_dog_path" xlink:href="#l_dog_path"/>
-              </g>
-            </svg>
-            {% if error %}
-            <p class="p_error">{{ error }}</p>
-            {% endif %}
-            <p>Login to continue.</p>
-            <a class="p_login_btn" href="{{ url_for(name='login') }}">Sign in with Google</a>
+            <div class="p_card">
+              <svg id="p_dog_svg" version="1.0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 625.000000 538.000000" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                <g transform="translate(0.000000,538.000000) scale(0.100000,-0.100000)" fill=var(--fp-dog-fill) stroke="none">
+                  <use id="p_dog_path" xlink:href="#l_dog_path"/>
+                </g>
+              </svg>
+              <h1 class="p_title">Frame Admin</h1>
+              {% if error %}
+              <p class="p_error">{{ error }}</p>
+              {% endif %}
+              <p class="p_subtitle">Sign in to continue.</p>
+              <a class="btn btn-primary p_login_btn" href="{{ url_for(name='login') }}">Sign in with Google</a>
+            </div>
           </div>
 {% endblock content %}

@@ -47,20 +47,66 @@
       table.dataTable.display tbody tr:hover {
         background-color: var(--dtables-row-hover);
       }
+      table.dataTable thead th {
+        color: var(--text-colour-highlight);
+        border-bottom: 1px solid var(--border);
+      }
+      table.dataTable tbody td {
+        border-top: 1px solid var(--border);
+      }
+      table.dataTable tbody tr {
+        cursor: pointer;
+      }
+      .dataTables_wrapper .dataTables_length,
+      .dataTables_wrapper .dataTables_info,
+      .dataTables_wrapper .dataTables_paginate {
+        color: var(--text-muted);
+        margin: 8px 0;
+      }
+      .dataTables_wrapper .dataTables_paginate .paginate_button {
+        color: var(--text-colour) !important;
+      }
+      .dataTables_wrapper .dataTables_paginate .paginate_button.current,
+      .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+        color: var(--text-colour-highlight) !important;
+        background: var(--surface-hover) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: var(--radius-sm);
+      }
       input,
-        select {
-        color: var(--input-colour);
+      select {
+        color: var(--text-colour);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 2px 6px;
+      }
+      .panel-hint {
+        max-width: 1200px;
+        margin: 12px auto 0;
+        padding: 0 50px;
+        color: var(--text-muted);
+        font-size: 13px;
       }
       .layout_toprow {
-        padding-top: 15px;
-        padding-left: 15px;
-        padding-right: 15px;
+        padding: 15px;
         margin: 0px;
         display: flex;
         flex-direction: row;
+        flex-wrap: wrap;
         justify-content: space-around;
         align-items: center;
-      }     
+        gap: 16px;
+      }
+      .photo-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .photo-panel .panel-label {
+        color: var(--text-muted);
+        font-size: 13px;
+      }
       .dtable {
         padding-top: 10px;
         padding-left: 50px;
@@ -68,8 +114,8 @@
       }
       .grow {
         max-width: 60%;
+        min-width: 320px;
         flex-grow: 1;
-        
        }
       .img-fluid {
         max-width: 100%;
@@ -90,8 +136,8 @@
       }
       canvas {
         transition: opacity 0.3s ease-in-out;
-        opacity: 0.6;
-        border-radius: 10px;
+        opacity: 0.85;
+        border-radius: var(--radius);
         overflow: hidden;
       }
       .copy_notice {
@@ -110,11 +156,13 @@
 {% endblock head %}
 {% block content %}
         <div class="layout_toprow">
-          <div>
+          <div class="photo-panel">
+            <span class="panel-label">Selected frame</span>
             <canvas id="photo"></canvas>
           </div>
           <div id="chart" class="grow"></div>
         </div>
+        <p class="panel-hint">Click a row to preview its frame · double-click a cell to copy its value.</p>
         <div class="dtable">
           <table id="data" class="display">
               <thead>
