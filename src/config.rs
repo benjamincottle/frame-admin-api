@@ -1,9 +1,7 @@
 use rand::{RngExt, distr::Alphanumeric};
-use serde::{Deserialize, Serialize};
-use serde_json;
-use std::{env, fs::File, io::BufReader, path::PathBuf};
+use std::{env, fs::File};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub postgres_connection_string: String,
     pub jwt_secret: String,
@@ -11,58 +9,78 @@ pub struct Config {
     pub google_oauth_client_id: String,
     pub google_oauth_client_secret: String,
     pub google_oauth_redirect_url: String,
-    #[serde(default)]
     pub allowed_emails: Vec<String>,
-    #[serde(default)]
     pub cookie_secure: bool,
 }
 
 impl Config {
-    pub fn init(config_dir: &str) -> Config {
-        let config_path = PathBuf::from(config_dir).join("config.json");
-        match File::open(config_path) {
-            Ok(f) => {
-                let reader = BufReader::new(f);
-                let config = serde_json::from_reader(reader).expect("couldn't deserialise config");
-                log::info!("config initialised");
-                config
-            }
-            Err(e) => {
-                log::warn!("couldn't open config file: {} empty config initialised", e);
-                Config {
-                    postgres_connection_string: env::var("POSTGRES_CONNECTION_STRING")
-                        .expect("POSTGRES_CONNECTION_STRING not set"),
-                    jwt_secret: generate_secret(),
-                    jwt_max_age: env::var("TOKEN_MAXAGE")
-                        .expect("TOKEN_MAXAGE not set")
-                        .parse()
-                        .expect("TOKEN_MAXAGE not a number"),
-                    google_oauth_client_id: env::var("GOOGLE_OAUTH_CLIENT_ID")
-                        .expect("GOOGLE_OAUTH_CLIENT_ID not set"),
-                    google_oauth_client_secret: env::var("GOOGLE_OAUTH_CLIENT_SECRET")
-                        .expect("GOOGLE_OAUTH_CLIENT_SECRET not set"),
-                    google_oauth_redirect_url: env::var("GOOGLE_OAUTH_REDIRECT_URI")
-                        .expect("GOOGLE_OAUTH_REDIRECT_URI not set"),
-                    allowed_emails: env::var("ALLOWED_EMAILS")
-                        .unwrap_or_default()
-                        .split(',')
-                        .map(|e| e.trim().to_lowercase())
-                        .filter(|e| !e.is_empty())
-                        .collect(),
-                    cookie_secure: env::var("COOKIE_SECURE")
-                        .map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes"))
-                        .unwrap_or(false),
-                }
-            }
-        }
+    pub fn init() -> Config {
+        let config = Config {
+            postgres_connection_string: require_env("POSTGRES_CONNECTION_STRING"),
+            jwt_secret: env::var("JWT_SECRET").unwrap_or_else(|_| {
+                log::warn!(
+                    "JWT_SECRET not set; generating an ephemeral secret. All sessions will \
+                     be invalidated on restart — set JWT_SECRET to a fixed random value in \
+                     production."
+                );
+                generate_secret()
+            }),
+            jwt_max_age: require_env("TOKEN_MAXAGE")
+                .parse()
+                .expect("TOKEN_MAXAGE not a number"),
+            google_oauth_client_id: require_env("GOOGLE_OAUTH_CLIENT_ID"),
+            google_oauth_client_secret: require_env("GOOGLE_OAUTH_CLIENT_SECRET"),
+            google_oauth_redirect_url: require_env("GOOGLE_OAUTH_REDIRECT_URI"),
+            allowed_emails: env::var("ALLOWED_EMAILS")
+                .unwrap_or_default()
+                .split(',')
+                .map(|e| e.trim().to_lowercase())
+                .filter(|e| !e.is_empty())
+                .collect(),
+            cookie_secure: env::var("COOKIE_SECURE")
+                .map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes"))
+                .unwrap_or(false),
+        };
+        log::info!("config initialised from environment");
+        config
     }
+}
 
-    pub fn save(&self, config_dir: &str) {
-        let config_path = PathBuf::from(config_dir).join("config.json");
-        let config_file = std::fs::File::create(config_path).expect("couldn't create config file");
-        let writer = std::io::BufWriter::new(config_file);
-        serde_json::to_writer_pretty(writer, &self.clone()).expect("couldn't write config to file");
-        log::info!("config saved");
+fn require_env(key: &str) -> String {
+    env::var(key).unwrap_or_else(|_| panic!("{key} not set"))
+}
+
+pub fn load_env_file(path: &str) {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        if key.is_empty() || env::var_os(key).is_some() {
+            continue;
+        }
+        // SAFETY: called once during startup, before any worker threads are
+        // spawned, so there is no concurrent access to the environment.
+        unsafe { env::set_var(key, value) };
+    }
+}
+
+pub fn restrict_permissions(file: &File) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Err(e) = file.set_permissions(std::fs::Permissions::from_mode(0o600)) {
+            log::warn!("could not restrict secrets file permissions: {e}");
+        }
     }
 }
 

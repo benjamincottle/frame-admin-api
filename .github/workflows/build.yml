@@ -12,7 +12,7 @@ on:
       - Cargo.lock
       - .github/workflows/build.yml
   schedule:
-    # Daily upstream-digest check for gcr.io/distroless/cc-debian13
+    # Daily upstream-digest check for gcr.io/distroless/cc-debian13:nonroot
     - cron: '17 4 * * *'
   workflow_dispatch: {}
 
@@ -21,7 +21,7 @@ permissions:
   packages: write
 
 env:
-  UPSTREAM_IMAGE: gcr.io/distroless/cc-debian13
+  UPSTREAM_IMAGE: gcr.io/distroless/cc-debian13:nonroot
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/frame-admin-api
   DIGEST_FILE: .cache/upstream-digest
 

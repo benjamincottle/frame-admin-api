@@ -22,7 +22,7 @@ lazy_static! {
 impl TASK_BOARD {
     #[allow(unused_must_use)]
     pub fn initialise(&self) {
-        self.lock().unwrap();
+        self.lock().unwrap_or_else(|e| e.into_inner());
     }
 
     pub fn board_status(&self) -> Result<TaskBoardStatus, String> {
@@ -41,9 +41,11 @@ impl TASK_BOARD {
         let total_steps = task_board.tasks.len() * 3;
         let current_step =
             pending_count + 2 * in_progress_count + 3 * (completed_count + failed_count);
-        println!(
-            "[Debug] Task Dashboard: total_steps: {}, current_step: {}, failed_count: {}",
-            total_steps, current_step, failed_count
+        log::debug!(
+            "task dashboard: total_steps: {}, current_step: {}, failed_count: {}",
+            total_steps,
+            current_step,
+            failed_count
         );
         Ok(TaskBoardStatus {
             total_steps,
@@ -53,7 +55,7 @@ impl TASK_BOARD {
     }
 
     pub fn add_task(&self, action: Action) -> TaskId {
-        let mut task_board = self.lock().unwrap();
+        let mut task_board = self.lock().unwrap_or_else(|e| e.into_inner());
         task_board.next_task_id += 1;
         let task_id = task_board.next_task_id;
         task_board.tasks.insert(
@@ -67,14 +69,14 @@ impl TASK_BOARD {
     }
 
     pub fn set_board_data(&self, task_id: TaskId, status: Status) {
-        let mut task_board = self.lock().unwrap();
+        let mut task_board = self.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(task) = task_board.tasks.get_mut(&task_id) {
             task.status = status;
         }
     }
 
     pub fn reset(&self) {
-        let mut task_board = self.lock().unwrap();
+        let mut task_board = self.lock().unwrap_or_else(|e| e.into_inner());
         task_board.next_task_id = 0;
         task_board.tasks.clear();
     }
@@ -142,13 +144,13 @@ impl TaskQueue {
     }
 
     pub fn push(&self, task: Task) {
-        let mut data = self.data.lock().unwrap();
+        let mut data = self.data.lock().unwrap_or_else(|e| e.into_inner());
         data.push_back(task);
         self.cv.notify_one();
     }
 
     pub fn pop(&self) -> Task {
-        let mut data = self.data.lock().unwrap();
+        let mut data = self.data.lock().unwrap_or_else(|e| e.into_inner());
         while data.is_empty() {
             data = self.cv.wait(data).unwrap();
         }
@@ -156,7 +158,7 @@ impl TaskQueue {
     }
 
     pub fn is_empty(&self) -> bool {
-        let data = self.data.lock().unwrap();
+        let data = self.data.lock().unwrap_or_else(|e| e.into_inner());
         data.is_empty()
     }
 }

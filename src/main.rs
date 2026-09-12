@@ -28,9 +28,12 @@ fn main() {
         eprintln!("{info}");
         eprintln!("{}", std::backtrace::Backtrace::force_capture());
     }));
-    dotenv::from_filename("secrets/.env").ok();
+    // Dev convenience: seed the environment from secrets/.env if present. Real
+    // environment variables (e.g. those provided by the container in production)
+    // always take precedence, and the file is simply absent in production.
+    config::load_env_file("secrets/.env");
     let app_data = AppState::init("secrets/");
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let postgres_connection_string = env.postgres_connection_string.clone();
     drop(env);
     let pool_size = 4;
@@ -42,7 +45,11 @@ fn main() {
     TASK_BOARD.initialise();
     SESSION_MGR.initialise();
     app_data.save("secrets/");
-    let server = Server::http("0.0.0.0:5000").expect("This should not fail");
+    // Bind address is configurable so the service can be pinned to localhost
+    // when it sits behind a reverse proxy. Defaults to the previous behaviour.
+    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:5000".to_string());
+    let server = Server::http(bind_addr.as_str())
+        .unwrap_or_else(|e| panic!("failed to bind {bind_addr}: {e}"));
     log::info!(
         "🚀 server started successfully, listening on {}",
         server.server_addr()
@@ -65,7 +72,22 @@ fn main() {
                     serve_error(request, tiny_http::StatusCode(405), "Method not allowed");
                     continue;
                 }
-                route_request(app_data.clone(), request);
+                // Isolate each request: a panic in a handler must not kill this
+                // worker thread (which would eventually take the whole server
+                // down). On panic the request is dropped, and tiny_http's Drop
+                // sends a 500 to the client automatically.
+                let app_data = app_data.clone();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    route_request(app_data, request);
+                }));
+                if let Err(e) = result {
+                    let msg = e
+                        .downcast_ref::<&str>()
+                        .map(|s| s.to_string())
+                        .or_else(|| e.downcast_ref::<String>().cloned())
+                        .unwrap_or_else(|| "unknown panic".to_string());
+                    log::error!("(worker) recovered from panic while handling request: {msg}");
+                }
             }
         });
     }

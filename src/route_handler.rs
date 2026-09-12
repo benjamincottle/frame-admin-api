@@ -76,7 +76,7 @@ pub fn route_request(app_data: AppState, request: Request) {
     let matched = match router.recognize(url) {
         Ok(m) => m,
         Err(_) => {
-            serve_static_file(request);
+            serve_static_file(request, url);
             return;
         }
     };
@@ -148,7 +148,7 @@ fn handle_oauth_login(
         }
     };
     SESSION_MGR.set_session_data(&session_id, "next_uri", &next_uri);
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let jwt_max_age = env.jwt_max_age;
     let cookie_secure = env.cookie_secure;
     drop(env);
@@ -160,6 +160,7 @@ fn handle_oauth_login(
         "/frame_admin/oauth",
         jwt_max_age,
         cookie_secure,
+        "Lax",
     ));
     if let Some(e) = session_err {
         log::debug!(
@@ -174,15 +175,16 @@ fn handle_oauth_login(
 fn handle_oauth_logout(app_data: AppState, request: Request) {
     // Always clear the auth cookies, even when the current token is missing or
     // expired, so a user with a stale session can still log out cleanly.
-    let cookie_secure = app_data.env.lock().unwrap().cookie_secure;
+    let cookie_secure = app_data.env.lock().unwrap_or_else(|e| e.into_inner()).cookie_secure;
     let mut response = Response::empty(tiny_http::StatusCode(302));
-    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure));
+    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure, "Strict"));
     response.add_header(set_cookie_header(
         "session",
         "",
         "/frame_admin/oauth",
         -1,
         cookie_secure,
+        "Lax",
     ));
     response
         .add_header(Header::from_str("Location: /frame_admin").expect("This should never fail"));
@@ -200,7 +202,7 @@ fn handle_oauth_authorise(app_data: AppState, request: Request) {
     };
     let state = SESSION_MGR.generate_state();
     SESSION_MGR.set_session_data(&session_id, "state", &state);
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let google_oauth_client_id = &env.google_oauth_client_id.to_string();
     let google_oauth_redirect_url = &env.google_oauth_redirect_url.to_string();
     drop(env);
@@ -275,7 +277,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         }
     };
     let current_datetime = Utc::now();
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let jwt_secret = env.jwt_secret.to_owned();
     let jwt_max_age = env.jwt_max_age;
     let cookie_secure = env.cookie_secure;
@@ -300,6 +302,7 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
         "/",
         jwt_max_age,
         cookie_secure,
+        "Strict",
     ));
     response.add_header(
         tiny_http::Header::from_bytes(&b"Location"[..], session_next_uri.as_bytes())
@@ -316,7 +319,7 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             return;
         }
     };
-    let cookie_secure = app_data.env.lock().unwrap().cookie_secure;
+    let cookie_secure = app_data.env.lock().unwrap_or_else(|e| e.into_inner()).cookie_secure;
     let mut response = match revoke_token(&app_data, &auth_guard.user) {
         Ok(_) => {
             let mut response = Response::empty(tiny_http::StatusCode(302));
@@ -336,13 +339,14 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
             return;
         }
     };
-    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure));
+    response.add_header(set_cookie_header("token", "", "/", -1, cookie_secure, "Strict"));
     response.add_header(set_cookie_header(
         "session",
         "",
         "/frame_admin/oauth",
         -1,
         cookie_secure,
+        "Lax",
     ));
     dispatch_response(request, response);
 }
@@ -350,7 +354,7 @@ fn handle_oauth_revoke(app_data: AppState, request: Request, auth_guard: AuthGua
 fn handle_index(app_data: AppState, request: Request, auth_guard: AuthGuard<ValidUser>) {
     let context = match auth_guard {
         Ok(_auth_guard) => {
-            let env = app_data.env.lock().unwrap();
+            let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
             drop(env);
             let mut response = Response::empty(tiny_http::StatusCode(302));
             response.add_header(
@@ -417,8 +421,14 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
     {
         match header.value.as_str() {
             "delete" => {
+                // Bound the body so a client can't force unbounded memory use.
+                const MAX_DELETE_BODY: u64 = 1 << 20; // 1 MiB
                 let mut body = String::new();
-                if let Err(e) = request.as_reader().read_to_string(&mut body) {
+                if let Err(e) = request
+                    .as_reader()
+                    .take(MAX_DELETE_BODY)
+                    .read_to_string(&mut body)
+                {
                     log::error!(
                         "(handle_manage) failed to read delete request body: {:?}",
                         e
@@ -557,8 +567,28 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
             request: Request,
             result: Result<T, impl std::fmt::Debug>,
         ) {
-            let json = serde_json::json!(result.expect("API call failed"));
-            let body = serde_json::to_string(&json).expect("can't serialize response");
+            // An upstream Google API failure must return an error response, not
+            // panic the worker thread.
+            let value = match result {
+                Ok(v) => v,
+                Err(e) => {
+                    log::error!("(handle_manage) upstream API call failed: {:?}", e);
+                    serve_error(
+                        request,
+                        tiny_http::StatusCode(502),
+                        "Upstream request failed",
+                    );
+                    return;
+                }
+            };
+            let body = match serde_json::to_string(&value) {
+                Ok(b) => b,
+                Err(e) => {
+                    log::error!("(handle_manage) serialize error: {:?}", e);
+                    serve_error(request, tiny_http::StatusCode(500), "Internal server error");
+                    return;
+                }
+            };
             let response = Response::empty(tiny_http::StatusCode(200))
                 .with_data(body.as_bytes(), Some(body.len()))
                 .with_header(
@@ -605,7 +635,9 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                 &session_id,
                             );
                             if let Ok(ref media_items) = list {
-                                log::info!("Media items picked: {:?}", media_items);
+                                // Avoid logging item base URLs/filenames; a count
+                                // is enough for operational visibility.
+                                log::info!("Media items picked: {} item(s)", media_items.len());
                                 let picked_map: HashMap<String, PickedMediaItem> = media_items
                                     .iter()
                                     .map(|item| (item.id.clone(), item.clone()))
@@ -983,11 +1015,16 @@ fn handle_telemetry_data(
         }
     };
     let params = extract_params(request.url());
+    // Clamp pagination inputs. A negative OFFSET (e.g. ?start=-1) is rejected by
+    // Postgres and previously surfaced as a 500 that also leaked a pooled
+    // connection; bound LIMIT so a client can't request an unbounded result set.
+    const MAX_PAGE_LEN: i64 = 1000;
     let offset = params
         .get("start")
         .and_then(|s| s.parse::<i64>().ok())
+        .filter(|v| *v >= 0)
         .unwrap_or(0);
-    let mut limit = params
+    let requested_limit = params
         .get("length")
         .and_then(|s| s.parse::<i64>().ok())
         .unwrap_or(20);
@@ -999,9 +1036,12 @@ fn handle_telemetry_data(
     let mut transaction = dbclient.transaction()?;
     let count_row = transaction.query_one("SELECT COUNT(*) FROM telemetry", &[])?;
     let records_total: i64 = count_row.get(0);
-    if limit == -1 {
-        limit = records_total;
-    }
+    // -1 is the DataTables "All" sentinel; otherwise require a sane positive page.
+    let limit = if requested_limit == -1 {
+        records_total
+    } else {
+        requested_limit.clamp(0, MAX_PAGE_LEN)
+    };
     let records = transaction.query(
         "SELECT ts, item_id, item_id_2, bat_voltage, boot_code, remote_addr 
         FROM telemetry 
@@ -1080,17 +1120,23 @@ fn handle_image(
         }
     };
     CONNECTION_POOL.release_client(dbclient);
-    let (nwidth, nheight) = if is_thumb {
-        match data.len() {
-            134400 => (120, 90), // landscape thumbnail
-            67200 => (90, 120),  // portrait thumbnail
-            _ => unreachable!(),
-        }
-    } else {
-        match data.len() {
-            134400 => (350, 261),
-            67200 => (175, 261),
-            _ => unreachable!(),
+    // Dimensions are inferred from the stored packed-pixel length. A row whose
+    // data has any other length (corrupt, truncated, or from an older schema)
+    // must not crash the worker: return 404 instead of panicking. This was a
+    // remotely reachable, whole-server denial of service.
+    let (nwidth, nheight) = match (is_thumb, data.len()) {
+        (true, 134400) => (120, 90), // landscape thumbnail
+        (true, 67200) => (90, 120),  // portrait thumbnail
+        (false, 134400) => (350, 261),
+        (false, 67200) => (175, 261),
+        _ => {
+            log::warn!(
+                "(handle_image) unexpected data length {} for item {}",
+                data.len(),
+                image_id
+            );
+            serve_error(request, tiny_http::StatusCode(404), "Not found");
+            return Ok(());
         }
     };
     let dynamic_image = decode_image(data)?;
@@ -1146,33 +1192,68 @@ fn safe_next_uri(candidate: &str) -> String {
 
 /// Build a `Set-Cookie` header, appending `Secure` when configured. Centralises the
 /// cookie attributes so login/logout/callback/revoke stay consistent.
-fn set_cookie_header(name: &str, value: &str, path: &str, max_age: i64, secure: bool) -> Header {
+///
+/// `same_site` should be `Strict` for the auth `token` cookie so it is never sent
+/// on cross-site requests (this is the CSRF defence for the destructive
+/// revoke/logout/manage routes), and `Lax` for the short-lived OAuth `session`
+/// cookie, which must survive Google's cross-site redirect back to the callback.
+fn set_cookie_header(
+    name: &str,
+    value: &str,
+    path: &str,
+    max_age: i64,
+    secure: bool,
+    same_site: &str,
+) -> Header {
     let secure_attr = if secure { " Secure;" } else { "" };
     Header::from_str(&format!(
-        "Set-Cookie: {name}={value}; Path={path}; Max-Age={max_age}; HttpOnly; SameSite=Lax;{secure_attr}"
+        "Set-Cookie: {name}={value}; Path={path}; Max-Age={max_age}; HttpOnly; SameSite={same_site};{secure_attr}"
     ))
     .expect("This should never fail")
 }
 
-fn serve_static_file(request: Request) {
-    let mut file_name = match request.url().split('?').next() {
-        Some(f) => f,
-        None => {
-            serve_error(
-                request,
-                tiny_http::StatusCode(500),
-                "Internal server error: could not parse url",
-            );
-            return;
-        }
-    };
-    file_name = file_name.trim_start_matches("/frame_admin/");
-    if file_name == "/" {
+/// Serve a file from the `public/` directory. `normalised_path` is the parsed,
+/// dot-segment-collapsed request path (produced in `route_request`), so encoded
+/// or literal `..` traversal has already been neutralised; on top of that we
+/// canonicalise the resolved path and require it to stay inside `public/`,
+/// which also defeats symlink escapes. Without this, the previous handler
+/// concatenated raw request input onto `public/` and happily served
+/// `../secrets/config.json`, `../src/*`, and arbitrary host files.
+fn serve_static_file(request: Request, normalised_path: &str) {
+    let file_name = normalised_path.trim_start_matches("/frame_admin/");
+    // Reject anything that isn't a simple relative path segment sequence.
+    if file_name.is_empty()
+        || file_name.starts_with('/')
+        || file_name.contains('\\')
+        || file_name.contains('\0')
+        || file_name.split('/').any(|seg| seg == ".." || seg == "." || seg.is_empty())
+    {
         serve_error(request, tiny_http::StatusCode(404), "File not found");
         return;
     }
-    let file_path = format!("public/{}", file_name);
-    let file = match File::open(file_path) {
+
+    let public_root = match std::fs::canonicalize("public") {
+        Ok(p) => p,
+        Err(e) => {
+            log::error!("(serve_static_file) cannot canonicalise public dir: {}", e);
+            serve_error(request, tiny_http::StatusCode(404), "File not found");
+            return;
+        }
+    };
+    let candidate = match std::fs::canonicalize(public_root.join(file_name)) {
+        Ok(p) => p,
+        Err(_) => {
+            serve_error(request, tiny_http::StatusCode(404), "File not found");
+            return;
+        }
+    };
+    // Final guard: the resolved, symlink-followed target must live under public/.
+    if !candidate.starts_with(&public_root) || !candidate.is_file() {
+        serve_error(request, tiny_http::StatusCode(404), "File not found");
+        return;
+    }
+
+    let file = match File::open(&candidate) {
         Ok(f) => f,
         Err(_) => {
             serve_error(request, tiny_http::StatusCode(404), "File not found");
@@ -1236,6 +1317,32 @@ pub fn log_request(request: &tiny_http::Request, status: u16, size: usize) {
     );
 }
 
+/// Baseline security response headers. The CSP is scoped to the CDN origins the
+/// templates actually use; `'unsafe-inline'` is required because the templates
+/// embed inline `<script>`/`<style>` blocks.
+fn security_headers() -> Vec<Header> {
+    const CSP: &str = "default-src 'self'; \
+script-src 'self' 'unsafe-inline' https://cdn.datatables.net https://cdnjs.cloudflare.com https://code.jquery.com; \
+style-src 'self' 'unsafe-inline' https://cdn.datatables.net https://fonts.googleapis.com; \
+img-src 'self' data:; \
+font-src 'self' https://fonts.gstatic.com; \
+connect-src 'self'; \
+object-src 'none'; \
+base-uri 'self'; \
+form-action 'self'; \
+frame-ancestors 'none'";
+    [
+        ("Content-Security-Policy", CSP),
+        ("X-Content-Type-Options", "nosniff"),
+        ("X-Frame-Options", "DENY"),
+        ("Referrer-Policy", "no-referrer"),
+        ("Cross-Origin-Opener-Policy", "same-origin"),
+    ]
+    .iter()
+    .filter_map(|(k, v)| Header::from_bytes(k.as_bytes(), v.as_bytes()).ok())
+    .collect()
+}
+
 fn dispatch_response<R>(request: Request, mut response: Response<R>)
 where
     R: Read,
@@ -1250,10 +1357,17 @@ where
                 .expect("This should never fail"),
         );
     }
+    // Baseline security headers applied to every response. The CSP allows the
+    // handful of CDN origins the dashboard templates load from, plus the inline
+    // scripts/styles those templates rely on; it blocks framing and restricts
+    // everything else to same-origin.
+    for header in security_headers() {
+        response.add_header(header);
+    }
     log_request(
         &request,
         response.status_code().0,
-        response.data_length().expect("This should not fail"),
+        response.data_length().unwrap_or(0),
     );
     if let Err(e) = request.respond(response) {
         log::error!("(dispatch_reponse) could not send response: {}", e);

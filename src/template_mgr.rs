@@ -42,14 +42,14 @@ lazy_static! {
 
 impl TEMPLATES {
     pub fn full_reload(&self) {
-        let mut templates = self.lock().unwrap();
+        let mut templates = self.lock().unwrap_or_else(|e| e.into_inner());
         templates
             .full_reload()
             .expect("(TEMPLATES:full_reload) error reloading templates");
     }
 
     pub fn render(&self, template_name: &str, context: &tera::Context) -> String {
-        let templates = self.lock().unwrap();
+        let templates = self.lock().unwrap_or_else(|e| e.into_inner());
         templates
             .render(template_name, context)
             .expect("(TEMPLATES:render) error rendering template")

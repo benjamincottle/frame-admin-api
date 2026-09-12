@@ -21,11 +21,11 @@ lazy_static! {
 impl SESSION_MGR {
     #[allow(unused_must_use)]
     pub fn initialise(&self) {
-        self.lock().unwrap();
+        self.lock().unwrap_or_else(|e| e.into_inner());
     }
     pub fn create_session(&self) -> SessionID {
         self.clean_expired();
-        let mut session_mgr = self.lock().unwrap();
+        let mut session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         let session_id = self.generate_state();
         let session = Session::new(session_mgr.session_duration);
         session_mgr.sessions.insert(session_id.clone(), session);
@@ -33,7 +33,7 @@ impl SESSION_MGR {
     }
 
     pub fn get_session_id(&self, request: &Request) -> Result<SessionID, SessionError> {
-        let mut session_mgr = self.lock().unwrap();
+        let mut session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         // Drop abandoned sessions on access so the in-memory map can't grow without
         // bound between the periodic cleanups in create_session.
         let now = SystemTime::now();
@@ -63,14 +63,14 @@ impl SESSION_MGR {
     }
 
     pub fn set_session_data(&self, session_id: &str, key: &str, value: &str) {
-        let mut session_mgr = self.lock().unwrap();
+        let mut session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(session) = session_mgr.sessions.get_mut(session_id) {
             session.insert_data(key.to_string(), value.to_string());
         }
     }
 
     pub fn get_session_data(&self, session_id: &str, key: &str) -> Option<Value> {
-        let session_mgr = self.lock().unwrap();
+        let session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(session) = session_mgr.sessions.get(session_id) {
             session.get_data(key).cloned()
         } else {
@@ -79,7 +79,7 @@ impl SESSION_MGR {
     }
 
     fn clean_expired(&self) {
-        let mut session_mgr = self.lock().unwrap();
+        let mut session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         let now = SystemTime::now();
         session_mgr
             .sessions

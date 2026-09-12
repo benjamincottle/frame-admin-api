@@ -18,38 +18,36 @@ pub struct AppState {
 
 impl AppState {
     pub fn init(config_dir: &str) -> AppState {
+        // Only the user database is persisted on disk now; configuration is read
+        // from the environment. `config_dir` locates `user_db.json`.
         let config_path = PathBuf::from(config_dir).join("user_db.json");
-        match File::open(config_path) {
+        let db = match File::open(config_path) {
             Ok(f) => {
                 let reader = BufReader::new(f);
-                let db = serde_json::from_reader(reader).expect("couldn't deserialise db");
-                log::info!("appstate initialised");
-                AppState {
-                    db: Arc::new(Mutex::new(db)),
-                    env: Arc::new(Mutex::new(config::Config::init(config_dir))),
-                }
+                serde_json::from_reader(reader).expect("couldn't deserialise db")
             }
             Err(e) => {
                 log::warn!("couldn't open user_db file: {}", e);
-                AppState {
-                    db: Arc::new(Mutex::new(Vec::new())),
-                    env: Arc::new(Mutex::new(config::Config::init(config_dir))),
-                }
+                Vec::new()
             }
+        };
+        log::info!("appstate initialised");
+        AppState {
+            db: Arc::new(Mutex::new(db)),
+            env: Arc::new(Mutex::new(config::Config::init())),
         }
     }
 
     pub fn save(&self, config_dir: &str) {
-        let db = self.db.lock().unwrap();
+        let db = self.db.lock().unwrap_or_else(|e| e.into_inner());
         let config_path = PathBuf::from(config_dir).join("user_db.json");
         let file = File::create(config_path).expect("couldn't create user_db file");
+        // Contains users' Google OAuth access and refresh tokens.
+        config::restrict_permissions(&file);
         let writer = BufWriter::new(file);
         serde_json::to_writer_pretty(writer, &db.clone()).expect("couldn't write user_db to file");
         drop(db);
-        let env = self.env.lock().unwrap();
-        env.save(config_dir);
-        drop(env);
-        log::info!("appstate saved");
+        log::info!("user_db saved");
     }
 }
 

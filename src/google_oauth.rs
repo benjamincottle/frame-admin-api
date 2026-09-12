@@ -34,7 +34,7 @@ pub fn request_token(
     app_data: &AppState,
     authorization_code: &str,
 ) -> Result<String, Box<dyn Error>> {
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let redirect_url = env.google_oauth_redirect_url.to_owned();
     let client_secret = env.google_oauth_client_secret.to_owned();
     let client_id = env.google_oauth_client_id.to_owned();
@@ -50,17 +50,24 @@ pub fn request_token(
             .expect("response is ok")
             .into_body()
             .read_json::<OAuthCreds>()?;
-        let parser = JWTParser::new(&client_id).expect("couldn't create JWTParser");
+        // Validate the id_token that came back with the token response instead of
+        // trusting its shape. A missing id_token or a token that fails signature/
+        // audience/issuer validation must be a clean error, not a worker panic.
+        let parser = JWTParser::new(&client_id)?;
+        let id_token = oauth_creds
+            .id_token
+            .clone()
+            .ok_or_else(|| -> Box<dyn Error> { "token response contained no id_token".into() })?;
         let claims = parser
-            .parse::<TokenClaims>(&oauth_creds.id_token.clone().expect("id_token is some"))
-            .expect("couldn't parse jwt token");
+            .parse::<TokenClaims>(&id_token)
+            .map_err(|e| -> Box<dyn Error> { format!("id_token validation failed: {e}").into() })?;
         let google_user = get_google_user(&oauth_creds.access_token)?;
         let email = google_user.email.to_lowercase();
         let allowed_emails = {
-            let env = app_data.env.lock().unwrap();
+            let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
             env.allowed_emails.clone()
         };
-        let mut user_db = app_data.db.lock().unwrap();
+        let mut user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
         let user = user_db.iter_mut().find(|user| user.email == email);
         // Access control: an explicit allowlist gates who may sign in. When the
         // allowlist is empty we fall back to allowing only pre-existing users so an
@@ -128,7 +135,7 @@ pub fn request_token(
 }
 
 pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box<dyn Error>> {
-    let env = app_data.env.lock().unwrap();
+    let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let client_secret = env.google_oauth_client_secret.to_owned();
     let client_id = env.google_oauth_client_id.to_owned();
     drop(env);
@@ -136,7 +143,7 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
         .credentials
         .refresh_token
         .to_owned()
-        .expect("refresh token should be present");
+        .ok_or_else(|| -> Box<dyn Error> { "no refresh token available for user".into() })?;
     let response = ureq::post("https://oauth2.googleapis.com/token")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .send(format!(
@@ -155,11 +162,13 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
             .as_secs()
             + oauth_creds.expires_in;
         oauth_creds.expires_in = expires_in;
-        let mut user_db = app_data.db.lock().unwrap();
+        let mut user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
+        // The user could have been removed between the auth check and here; treat
+        // that as an error rather than panicking the worker.
         let user_to_update = user_db
             .iter_mut()
             .find(|user_to_update| user_to_update.id == user.id)
-            .expect("auth_guard was Ok");
+            .ok_or_else(|| -> Box<dyn Error> { "user no longer exists".into() })?;
         user_to_update
             .credentials
             .access_token
@@ -184,15 +193,15 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
     }
 }
 
-pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<ureq::Error>> {
+pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<dyn Error>> {
     ureq::post("https://oauth2.googleapis.com/revoke")
         .header("Content-Type", "application/x-www-form-urlencoded")
         .send(format!("token={}", user.credentials.access_token))?;
-    let mut user_db = app_data.db.lock().unwrap();
+    let mut user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
     let user_to_update = user_db
         .iter_mut()
         .find(|user_to_update| user_to_update.id == user.id)
-        .expect("auth_guard was Ok");
+        .ok_or_else(|| -> Box<dyn Error> { "user no longer exists".into() })?;
     user_to_update.credentials.expires_in = 0;
     user_to_update.credentials.refresh_token = None;
     user_to_update.credentials.id_token = None;
@@ -257,7 +266,7 @@ impl ValidUser {
             return Err(AuthError::MissingToken);
         }
         let token = token.expect("token is some");
-        let env = app_data.env.lock().unwrap();
+        let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
         let jwt_secret = env.jwt_secret.to_owned();
         drop(env);
         let decode = decode::<TokenClaims>(
@@ -269,7 +278,7 @@ impl ValidUser {
         match decode {
             Ok(token) => {
                 let user_opt = {
-                    let user_db = app_data.db.lock().unwrap();
+                    let user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
                     user_db
                         .iter()
                         .find(|user| user.id == token.claims.sub)
@@ -374,7 +383,9 @@ impl JWTParser {
         let oidc_config: serde_json::Value = oidc_config_resp.into_body().read_json()?;
         let jwks_uri = oidc_config["jwks_uri"]
             .as_str()
-            .expect("can't get jwks_uri as str");
+            .ok_or_else(|| -> Box<dyn Error> {
+                "OIDC discovery document had no jwks_uri".into()
+            })?;
         Ok(Self {
             client_id: client_id.to_owned(),
             key_provider: Arc::new(Mutex::new(GooglePublicKeyProvider::new(jwks_uri))),
@@ -382,7 +393,7 @@ impl JWTParser {
     }
 
     pub fn parse<T: DeserializeOwned>(&self, token: &str) -> Result<T, JWTParserError> {
-        let mut provider = self.key_provider.lock().unwrap();
+        let mut provider = self.key_provider.lock().unwrap_or_else(|e| e.into_inner());
         match jsonwebtoken::decode_header(token) {
             Ok(header) => match header.kid {
                 None => Result::Err(JWTParserError::UnknownKid),
