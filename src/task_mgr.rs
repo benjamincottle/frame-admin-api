@@ -26,9 +26,9 @@ impl TASK_BOARD {
     }
 
     pub fn board_status(&self) -> Result<TaskBoardStatus, String> {
-        let task_board = self
-            .lock()
-            .map_err(|e| format!("Failed to acquire lock: {}", e))?;
+        // Recover from a poisoned lock like every other accessor: one panicked
+        // worker must not turn the progress endpoint into a permanent 500.
+        let task_board = self.lock().unwrap_or_else(|e| e.into_inner());
         let (pending_count, in_progress_count, completed_count, failed_count) = task_board
             .tasks
             .values()

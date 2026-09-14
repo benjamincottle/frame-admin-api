@@ -131,8 +131,16 @@ pub fn decode_image(data: Vec<u8>) -> Result<DynamicImage, Box<dyn std::error::E
         buf.push(p1);
         buf.push(p2);
         if buf.len() == 2 {
-            let p1 = map[&buf[0]];
-            let p2 = map[&buf[1]];
+            // A nibble outside the 7-entry palette means the stored blob is
+            // corrupt; report it rather than panicking the request worker.
+            let invalid = || {
+                Box::new(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "(decode_image) palette index out of range",
+                )) as Box<dyn std::error::Error>
+            };
+            let p1 = *map.get(&buf[0]).ok_or_else(invalid)?;
+            let p2 = *map.get(&buf[1]).ok_or_else(invalid)?;
             pixels.push(p1.0);
             pixels.push(p1.1);
             pixels.push(p1.2);

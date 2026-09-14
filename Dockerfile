@@ -6,7 +6,7 @@ ENV RUSTFLAGS="-C link-arg=-s" \
 WORKDIR /app
 COPY . .
 
-RUN cargo build --release && mkdir -p /app/secrets
+RUN cargo build --release --locked && mkdir -p /app/secrets
 
 # --- Final Stage ---
 # The :nonroot variant runs as an unprivileged user (uid 65532) instead of root.

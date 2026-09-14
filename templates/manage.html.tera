@@ -220,7 +220,7 @@
 
 {% endblock content %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
   const addBtn = document.getElementById("create-session-btn");
   const removeBtn = document.getElementById("remove-selected-btn");
   const sessionModal = document.getElementById("session-modal");
@@ -230,6 +230,16 @@
   let updateSelectionButtons = function() {};
   const SYNC_POLL_INTERVAL = 1500;
   let progressMeterCounter = 0;
+  const LOGIN_URL = "/frame_admin/oauth/login";
+
+  // JSON endpoints answer 401 once the session expires; send the user back to login.
+  function requireAuth(response) {
+    if (response.status === 401) {
+      window.location.href = LOGIN_URL;
+      throw new Error("Session expired");
+    }
+    return response;
+  }
 
   function createProgressMeter(container) {
     const id = `sm-${++progressMeterCounter}`;
@@ -301,6 +311,7 @@
     function poll(delayMs) {
       setTimeout(() => {
         fetch("/frame_admin/sync_progress")
+          .then(requireAuth)
           .then(res => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             return res.json();
@@ -331,14 +342,19 @@
     const container = sessionModalBody;
     let pollInterval;
     fetch("/frame_admin/manage", {
-        method: "GET",
+        method: "POST",
         headers: {
           "picker-session": "create"
         }
       })
+      .then(requireAuth)
       .then(response => response.json())
       .then(data => {
         container.innerHTML = "";
+        // Only ever link to an https URL Google handed us; never a javascript:/data: value.
+        if (typeof data.pickerUri !== "string" || !/^https:\/\//.test(data.pickerUri)) {
+          throw new Error("Picker session response had no usable pickerUri");
+        }
 
         const pickerLink = document.createElement("a");
         pickerLink.href = data.pickerUri;
@@ -370,19 +386,15 @@
         deleteButton.addEventListener("click", () => {
           if (pollInterval) clearInterval(pollInterval);
           fetch("/frame_admin/manage", {
-              method: "GET",
+              method: "POST",
               headers: {
                 "picker-session": "delete:" + data.id
               }
             })
-            .then(response => response.text())
-            .then(text => {
+            .then(requireAuth)
+            .then(() => {
               addButtonLocked = false;
               updateSelectionButtons();
-              if (text === "{}") {
-                text = "";
-              }
-              container.innerHTML = text;
               closeSessionModal();
             })
         });
@@ -400,11 +412,12 @@
 
         function pollPickerSession() {
           fetch("/frame_admin/manage", {
-              method: "GET",
+              method: "POST",
               headers: {
                 "picker-session": "poll:" + data.id
               }
             })
+            .then(requireAuth)
             .then(response => response.json())
             .then(updateData => {
               if (updateData.mediaItemsSet) {
@@ -655,12 +668,13 @@
       fetch(`/frame_admin/album_data?page=${page}&pageSize=${pageSize}`, {
         signal: albumLoadController.signal
       })
+        .then(requireAuth)
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
         .then(data => {
-          render(data.items || [], data.page || 1, data.total || 0, data.pageSize || PAGE_SIZE);
+          render(data.items || [], data.page || 1, data.total || 0, data.pageSize || pageSize);
         })
         .catch(err => {
           if (err.name === "AbortError") return;
@@ -698,6 +712,7 @@
         },
         body: JSON.stringify({ photos: photoIds })
       })
+        .then(requireAuth)
         .then(res => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();

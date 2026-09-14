@@ -35,6 +35,7 @@ fn main() {
     let app_data = AppState::init("secrets/");
     let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let postgres_connection_string = env.postgres_connection_string.clone();
+    session_mgr::set_secure_cookies(env.cookie_secure);
     drop(env);
     let pool_size = 4;
     if let Err(e) = CONNECTION_POOL.initialise(&postgres_connection_string, pool_size) {
