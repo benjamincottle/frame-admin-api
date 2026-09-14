@@ -1,0 +1,16 @@
+# cargo-audit configuration. Read by `cargo audit` locally and by the
+# rustsec/audit-check action in .github/workflows/audit.yml.
+#
+# Every ignored advisory must carry the reason it does not apply here and the
+# condition under which it should be revisited.
+
+[advisories]
+ignore = [
+    # RUSTSEC-2023-0071 "Marvin Attack" in the `rsa` crate: a timing side channel
+    # in RSA *private-key* operations (decryption / signing). This service only
+    # uses `rsa` (via jsonwebtoken's rust_crypto backend) to verify the RS256
+    # signature on Google's id_token with Google's *public* key, so there is no
+    # private key to recover. No fixed release exists on the rsa 0.9 line.
+    # Revisit when jsonwebtoken moves to an rsa release that closes the advisory.
+    "RUSTSEC-2023-0071",
+]
