@@ -1,55 +1,54 @@
-use lazy_static::lazy_static;
 use std::{
     collections::{BTreeMap, HashMap},
     process::exit,
-    sync::Mutex,
+    sync::{LazyLock, Mutex},
 };
 use tera::{Function, Tera};
 
-lazy_static! {
-    pub static ref TEMPLATES: Mutex<Tera> = {
-        let mut tera = match Tera::new("templates/*.html.tera") {
-            Ok(t) => {
-                log::info!("compiling templates complete");
-                t
-            }
-            Err(e) => {
-                log::error!("template parsing error(s): {}", e);
-                exit(1);
-            }
-        };
-        let urls = {
-            let mut urls = BTreeMap::new();
-            urls.insert("index".to_string(), "/frame_admin".to_string());
-            urls.insert("login".to_string(), "/frame_admin/oauth/login".to_string());
-            urls.insert(
-                "logout".to_string(),
-                "/frame_admin/oauth/logout".to_string(),
-            );
-            urls.insert("monitor".to_string(), "/frame_admin/monitor".to_string());
-            urls.insert("manage".to_string(), "/frame_admin/manage".to_string());
-            urls.insert(
-                "revoke".to_string(),
-                "/frame_admin/oauth/revoke".to_string(),
-            );
-            urls
-        };
-        tera.register_function("url_for", make_url_for(urls));
-        log::info!("setup template functions complete");
-        Mutex::new(tera)
+pub static TEMPLATES: LazyLock<Templates> = LazyLock::new(|| {
+    let mut tera = match Tera::new("templates/*.html.tera") {
+        Ok(t) => {
+            log::info!("compiling templates complete");
+            t
+        }
+        Err(e) => {
+            log::error!("template parsing error(s): {}", e);
+            exit(1);
+        }
     };
-}
+    let urls = {
+        let mut urls = BTreeMap::new();
+        urls.insert("index".to_string(), "/frame_admin".to_string());
+        urls.insert("login".to_string(), "/frame_admin/oauth/login".to_string());
+        urls.insert(
+            "logout".to_string(),
+            "/frame_admin/oauth/logout".to_string(),
+        );
+        urls.insert("monitor".to_string(), "/frame_admin/monitor".to_string());
+        urls.insert("manage".to_string(), "/frame_admin/manage".to_string());
+        urls.insert(
+            "revoke".to_string(),
+            "/frame_admin/oauth/revoke".to_string(),
+        );
+        urls
+    };
+    tera.register_function("url_for", make_url_for(urls));
+    log::info!("setup template functions complete");
+    Templates(Mutex::new(tera))
+});
 
-impl TEMPLATES {
+pub struct Templates(Mutex<Tera>);
+
+impl Templates {
     pub fn full_reload(&self) {
-        let mut templates = self.lock().unwrap_or_else(|e| e.into_inner());
+        let mut templates = self.0.lock().unwrap_or_else(|e| e.into_inner());
         templates
             .full_reload()
             .expect("(TEMPLATES:full_reload) error reloading templates");
     }
 
     pub fn render(&self, template_name: &str, context: &tera::Context) -> String {
-        let templates = self.lock().unwrap_or_else(|e| e.into_inner());
+        let templates = self.0.lock().unwrap_or_else(|e| e.into_inner());
         templates
             .render(template_name, context)
             .expect("(TEMPLATES:render) error rendering template")

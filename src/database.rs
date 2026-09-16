@@ -1,20 +1,27 @@
-use lazy_static::lazy_static;
 use postgres::{Client, NoTls};
 use std::{
     collections::VecDeque,
     ops::{Deref, DerefMut},
-    sync::{Mutex, MutexGuard},
+    sync::{LazyLock, Mutex, MutexGuard},
 };
 
-lazy_static! {
-    pub static ref CONNECTION_POOL: Mutex<Pool> = {
-        log::info!("empty pool created");
-        Mutex::new(Pool {
-            connections: VecDeque::new(),
-            database_url: String::new(),
-            max_size: 0,
-        })
-    };
+pub static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
+    log::info!("empty pool created");
+    ConnectionPool(Mutex::new(Pool {
+        connections: VecDeque::new(),
+        database_url: String::new(),
+        max_size: 0,
+    }))
+});
+
+pub struct ConnectionPool(Mutex<Pool>);
+
+impl Deref for ConnectionPool {
+    type Target = Mutex<Pool>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 pub struct Pool {
@@ -71,7 +78,7 @@ impl Drop for PooledClient {
     }
 }
 
-impl CONNECTION_POOL {
+impl ConnectionPool {
     pub fn initialise(&self, database_url: &str, pool_size: usize) -> Result<(), postgres::Error> {
         let mut pool = lock_pool(self);
         pool.database_url = database_url.to_string();

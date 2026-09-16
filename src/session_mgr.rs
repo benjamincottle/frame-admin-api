@@ -9,10 +9,10 @@
 //!   rather than only clearing the browser cookie.
 
 use crate::config::random_token;
-use lazy_static::lazy_static;
 use std::{
     collections::HashMap,
-    sync::{Mutex, OnceLock},
+    ops::Deref,
+    sync::{LazyLock, Mutex, OnceLock},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tiny_http::Request;
@@ -53,19 +53,28 @@ pub fn token_cookie_name() -> &'static str {
     }
 }
 
-lazy_static! {
-    pub static ref SESSION_MGR: Mutex<SessionManager> = {
-        let session_mgr = SessionManager {
-            sessions: HashMap::new(),
-            session_duration: Duration::from_secs(OAUTH_SESSION_TTL_SECS),
-        };
-        log::info!("session manager created");
-        Mutex::new(session_mgr)
+pub static SESSION_MGR: LazyLock<SharedSessionManager> = LazyLock::new(|| {
+    let session_mgr = SessionManager {
+        sessions: HashMap::new(),
+        session_duration: Duration::from_secs(OAUTH_SESSION_TTL_SECS),
     };
-    static ref REVOKED_TOKENS: Mutex<HashMap<String, u64>> = Mutex::new(HashMap::new());
+    log::info!("session manager created");
+    SharedSessionManager(Mutex::new(session_mgr))
+});
+static REVOKED_TOKENS: LazyLock<Mutex<HashMap<String, u64>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub struct SharedSessionManager(Mutex<SessionManager>);
+
+impl Deref for SharedSessionManager {
+    type Target = Mutex<SessionManager>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl SESSION_MGR {
+impl SharedSessionManager {
     #[allow(unused_must_use)]
     pub fn initialise(&self) {
         self.lock().unwrap_or_else(|e| e.into_inner());

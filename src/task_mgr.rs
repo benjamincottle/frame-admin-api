@@ -1,25 +1,33 @@
-use lazy_static::lazy_static;
 use serde::Serialize;
 
 use crate::gphotos_api::MediaItem;
 
 use std::{
     collections::{BTreeMap, VecDeque},
-    sync::{Condvar, Mutex},
+    ops::Deref,
+    sync::{Condvar, LazyLock, Mutex},
 };
 
-lazy_static! {
-    pub static ref TASK_BOARD: Mutex<TaskBoard> = {
-        let task_board = TaskBoard {
-            tasks: BTreeMap::new(),
-            next_task_id: 0,
-        };
-        log::info!("task board created");
-        Mutex::new(task_board)
+pub static TASK_BOARD: LazyLock<SharedTaskBoard> = LazyLock::new(|| {
+    let task_board = TaskBoard {
+        tasks: BTreeMap::new(),
+        next_task_id: 0,
     };
+    log::info!("task board created");
+    SharedTaskBoard(Mutex::new(task_board))
+});
+
+pub struct SharedTaskBoard(Mutex<TaskBoard>);
+
+impl Deref for SharedTaskBoard {
+    type Target = Mutex<TaskBoard>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl TASK_BOARD {
+impl SharedTaskBoard {
     #[allow(unused_must_use)]
     pub fn initialise(&self) {
         self.lock().unwrap_or_else(|e| e.into_inner());
