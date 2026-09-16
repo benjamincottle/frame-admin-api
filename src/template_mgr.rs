@@ -1,21 +1,13 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     process::exit,
     sync::{LazyLock, Mutex},
 };
-use tera::{Function, Tera};
+use tera::{Kwargs, State, Tera, TeraResult};
 
 pub static TEMPLATES: LazyLock<Templates> = LazyLock::new(|| {
-    let mut tera = match Tera::new("templates/*.html.tera") {
-        Ok(t) => {
-            log::info!("compiling templates complete");
-            t
-        }
-        Err(e) => {
-            log::error!("template parsing error(s): {}", e);
-            exit(1);
-        }
-    };
+    let mut tera = Tera::new();
+    // Functions must be registered before loading: Tera checks every call at parse time.
     let urls = {
         let mut urls = BTreeMap::new();
         urls.insert("index".to_string(), "/frame_admin".to_string());
@@ -34,6 +26,16 @@ pub static TEMPLATES: LazyLock<Templates> = LazyLock::new(|| {
     };
     tera.register_function("url_for", make_url_for(urls));
     log::info!("setup template functions complete");
+    match tera.load_from_glob("templates/*.html.tera") {
+        Ok(()) => log::info!("compiling templates complete"),
+        Err(e) => {
+            log::error!("template parsing error(s): {}", e);
+            exit(1);
+        }
+    }
+    // Tera only autoescapes files ending .html/.htm/.xml by default; ours end
+    // .html.tera, so opt them in explicitly.
+    tera.autoescape_on([".html.tera"]);
     Templates(Mutex::new(tera))
 });
 
@@ -55,17 +57,42 @@ impl Templates {
     }
 }
 
-fn make_url_for(urls: BTreeMap<String, String>) -> impl Function {
-    Box::new(
-        move |args: &HashMap<String, tera::Value>| -> tera::Result<tera::Value> {
-            match args.get("name") {
-                Some(val) => match tera::from_value::<String>(val.clone()) {
-                    Ok(v) => Ok(tera::to_value(urls.get(&v).expect("assert key exists"))
-                        .expect("couldn't convert value to tera::Value")),
-                    Err(e) => Err(format!("(make_url_for) no match for name: {}", e).into()),
-                },
-                None => Err("(make_url_for) no value for name".into()),
-            }
-        },
-    )
+fn make_url_for(
+    urls: BTreeMap<String, String>,
+) -> impl Fn(Kwargs, &State) -> TeraResult<String> + Send + Sync + 'static {
+    move |kwargs: Kwargs, _: &State| {
+        let name = kwargs.must_get::<&str>("name")?;
+        urls.get(name).cloned().ok_or_else(|| {
+            tera::Error::message(format!("(make_url_for) no match for name: {name}"))
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn templates_render() {
+        let mut context = tera::Context::new();
+        context.insert("csp_nonce", "nonce123");
+        let index = TEMPLATES.render("index.html.tera", &context);
+        assert!(index.contains("nonce=\"nonce123\""));
+        assert!(index.contains("href=\"/frame_admin/oauth/login\""));
+
+        // main() reloads at startup; escaping must survive the reload.
+        TEMPLATES.full_reload();
+        context.insert("error", "<b>x</b>");
+        let index = TEMPLATES.render("index.html.tera", &context);
+        assert!(index.contains("&lt;b&gt;x&lt;/b&gt;"));
+
+        let mut context = tera::Context::new();
+        context.insert("csp_nonce", "nonce123");
+        context.insert("is_authenticated", &true);
+        for page in ["manage", "monitor"] {
+            context.insert("current_page", page);
+            let html = TEMPLATES.render(&format!("{page}.html.tera"), &context);
+            assert!(html.contains("action=\"/frame_admin/oauth/logout\""));
+        }
+    }
 }
