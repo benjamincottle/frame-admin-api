@@ -83,7 +83,9 @@ impl SharedSessionManager {
     pub fn create_session(&self) -> SessionID {
         let mut session_mgr = self.lock().unwrap_or_else(|e| e.into_inner());
         let now = SystemTime::now();
-        session_mgr.sessions.retain(|_, session| session.expires > now);
+        session_mgr
+            .sessions
+            .retain(|_, session| session.expires > now);
         if session_mgr.sessions.len() >= MAX_SESSIONS {
             let victim = session_mgr
                 .sessions
@@ -106,7 +108,9 @@ impl SharedSessionManager {
         // Drop abandoned sessions on access so the in-memory map can't grow
         // between the cleanups in create_session.
         let now = SystemTime::now();
-        session_mgr.sessions.retain(|_, session| session.expires > now);
+        session_mgr
+            .sessions
+            .retain(|_, session| session.expires > now);
         let cookie = request
             .headers()
             .iter()
@@ -114,7 +118,8 @@ impl SharedSessionManager {
             .ok_or(SessionError::MissingCookie)?
             .value
             .to_string();
-        let session_id = cookie_value(&cookie, SESSION_COOKIE).ok_or(SessionError::InvalidCookie)?;
+        let session_id =
+            cookie_value(&cookie, SESSION_COOKIE).ok_or(SessionError::InvalidCookie)?;
         match session_mgr.sessions.get(session_id) {
             Some(session) if session.expires > now => Ok(session_id.to_string()),
             Some(_) => {

@@ -6,7 +6,6 @@ use crate::{
 use chrono::Utc;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json;
 use std::{
     collections::HashMap,
     error::Error,
@@ -38,7 +37,10 @@ impl fmt::Debug for OAuthCreds {
             .field("id_token", &self.id_token.as_ref().map(|_| "<redacted>"))
             .field("scope", &self.scope)
             .field("token_type", &self.token_type)
-            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "<redacted>"))
+            .field(
+                "refresh_token",
+                &self.refresh_token.as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }
@@ -132,7 +134,9 @@ pub fn request_token(
     // unconfigured deployment can't be hijacked by open self-registration.
     if allowed_emails.is_empty() {
         if user.is_none() {
-            log::warn!("(request_token) sign-in blocked: empty allowlist and no existing user for {email}");
+            log::warn!(
+                "(request_token) sign-in blocked: empty allowlist and no existing user for {email}"
+            );
             return Err(From::from("email not authorised"));
         }
     } else if !allowed_emails.contains(&email) {
@@ -241,7 +245,9 @@ pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<dyn Erro
         .as_deref()
         .unwrap_or(user.credentials.access_token.as_str());
     if let Err(e) = ureq::post(GOOGLE_REVOKE_URL).send_form([("token", token)]) {
-        log::warn!("(revoke_token) Google rejected the revocation (clearing local credentials anyway): {e}");
+        log::warn!(
+            "(revoke_token) Google rejected the revocation (clearing local credentials anyway): {e}"
+        );
     }
     let mut user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
     let user_to_update = user_db
@@ -313,10 +319,7 @@ impl ValidUser {
 
         let user_opt = {
             let user_db = app_data.db.lock().unwrap_or_else(|e| e.into_inner());
-            user_db
-                .iter()
-                .find(|user| user.id == claims.sub)
-                .cloned()
+            user_db.iter().find(|user| user.id == claims.sub).cloned()
         };
         let Some(mut user) = user_opt else {
             log::warn!("user belonging to this token no longer exists");
@@ -419,7 +422,9 @@ impl JWTParser {
         // The discovery document is fetched over TLS from Google, but never
         // follow it somewhere else: the key set must come from Google as well.
         if !jwks_uri.starts_with("https://www.googleapis.com/") {
-            return Err(From::from("OIDC discovery document pointed jwks_uri off-domain"));
+            return Err(From::from(
+                "OIDC discovery document pointed jwks_uri off-domain",
+            ));
         }
         Ok(Self {
             client_id: client_id.to_owned(),

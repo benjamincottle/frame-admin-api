@@ -68,7 +68,9 @@ impl Config {
         match url::Url::parse(&google_oauth_redirect_url) {
             Ok(u) if u.scheme() == "https" => {}
             Ok(u) if u.scheme() == "http" => {
-                log::warn!("GOOGLE_OAUTH_REDIRECT_URI uses plain http; only acceptable for local development");
+                log::warn!(
+                    "GOOGLE_OAUTH_REDIRECT_URI uses plain http; only acceptable for local development"
+                );
             }
             _ => fatal("GOOGLE_OAUTH_REDIRECT_URI must be an absolute http(s) URL"),
         }

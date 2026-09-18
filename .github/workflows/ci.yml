@@ -67,12 +67,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6
+        run: |
+          curl -sSfL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_arm64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar -xzf actionlint.tar.gz actionlint
+
+      # Exits non-zero on any finding; also runs shellcheck on run: scripts.
       - name: actionlint
-        uses: reviewdog/action-actionlint@ab7138020abfe6cd20b742c82e5b7a9749fb5884 # v1.75.0
-        with:
-          reviewdog_flags: -reporter=local
-          # Default is "none", which exits 0 even when actionlint finds errors.
-          fail_level: error
+        run: ./actionlint -color
 
   # build.yml only runs on main, so without this a broken Dockerfile is not
   # discovered until after the merge. Skipped only on a main push, where

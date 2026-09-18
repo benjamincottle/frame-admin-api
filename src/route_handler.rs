@@ -1,6 +1,5 @@
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
-use serde_json;
 
 use crate::{
     config::random_token,
@@ -103,7 +102,10 @@ pub fn route_request(app_data: AppState, request: Request) {
     // Every state-changing route is POST-only, and no POST is ever legitimately
     // made from another origin, so refuse cross-site POSTs before routing.
     if is_post(&request) && is_cross_site(&request) {
-        log::warn!("(route_request) rejected cross-site POST to {}", sanitise_log(url));
+        log::warn!(
+            "(route_request) rejected cross-site POST to {}",
+            sanitise_log(url)
+        );
         serve_error(request, tiny_http::StatusCode(403), "Forbidden");
         return;
     }
@@ -378,9 +380,7 @@ fn handle_index(request: Request, auth_guard: AuthGuard<ValidUser>) {
             // login (e.g. an unauthorised email or an OAuth error).
             if let Some(error) = extract_params(request.url()).get("error") {
                 let message = match error.as_str() {
-                    "unauthorised" => {
-                        "Your account is not authorised to access this application."
-                    }
+                    "unauthorised" => "Your account is not authorised to access this application.",
                     "oauth" => "Sign-in failed. Please try again.",
                     _ => "Sign-in failed. Please try again.",
                 };
@@ -580,7 +580,11 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
         if let Some(id) = session_id
             && !is_valid_picker_session_id(id)
         {
-            serve_error(request, tiny_http::StatusCode(400), "Invalid picker session id");
+            serve_error(
+                request,
+                tiny_http::StatusCode(400),
+                "Invalid picker session id",
+            );
             return;
         }
 
@@ -637,7 +641,11 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                         ),
                     );
                 } else {
-                    serve_error(request, tiny_http::StatusCode(400), "Missing picker session id");
+                    serve_error(
+                        request,
+                        tiny_http::StatusCode(400),
+                        "Missing picker session id",
+                    );
                 }
             }
             "poll" => {
@@ -647,134 +655,132 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                         &auth_guard.user.credentials.access_token,
                         &session_id,
                     );
-                    if let Ok(ref poll_response) = result {
-                        if poll_response.mediaItemsSet {
-                            log::info!(
-                                "Media items have been set for picking session {}",
-                                session_id
-                            );
-                            let list = PickingSession::list_picked(
-                                &auth_guard.user.credentials.access_token,
-                                &session_id,
-                            );
-                            if let Ok(ref media_items) = list {
-                                // Avoid logging item base URLs/filenames; a count
-                                // is enough for operational visibility.
-                                log::info!("Media items picked: {} item(s)", media_items.len());
-                                let picked_map: HashMap<String, PickedMediaItem> = media_items
-                                    .iter()
-                                    .map(|item| (item.id.clone(), item.clone()))
-                                    .collect();
-                                let picked_ids: HashSet<String> =
-                                    media_items.iter().map(|item| item.id.clone()).collect();
-                                if picked_ids.is_empty() {
-                                    log::info!(
-                                        "No media items returned for picking session {}, nothing to sync",
-                                        session_id
-                                    );
-                                } else {
-                                    let access_token =
-                                        auth_guard.user.credentials.access_token.clone();
-                                    let mut dbclient = match CONNECTION_POOL.get_client() {
-                                        Ok(c) => c,
-                                        Err(e) => {
-                                            log::error!("(handle_manage) DB pool error: {:?}", e);
-                                            respond_json(request, result);
-                                            return;
-                                        }
-                                    };
-                                    let mut existing_ids = HashSet::new();
-                                    match dbclient.query("SELECT item_id FROM album", &[]) {
-                                        Ok(rows) => {
-                                            for row in rows {
-                                                let media_item_id: String = row.get(0);
-                                                existing_ids.insert(media_item_id);
-                                            }
-                                        }
-                                        Err(e) => {
-                                            log::error!("(handle_manage) DB query error: {:?}", e);
-                                            CONNECTION_POOL.release_client(dbclient);
-                                            respond_json(request, result);
-                                            return;
+                    if let Ok(ref poll_response) = result
+                        && poll_response.mediaItemsSet
+                    {
+                        log::info!(
+                            "Media items have been set for picking session {}",
+                            session_id
+                        );
+                        let list = PickingSession::list_picked(
+                            &auth_guard.user.credentials.access_token,
+                            &session_id,
+                        );
+                        if let Ok(ref media_items) = list {
+                            // Avoid logging item base URLs/filenames; a count
+                            // is enough for operational visibility.
+                            log::info!("Media items picked: {} item(s)", media_items.len());
+                            let picked_map: HashMap<String, PickedMediaItem> = media_items
+                                .iter()
+                                .map(|item| (item.id.clone(), item.clone()))
+                                .collect();
+                            let picked_ids: HashSet<String> =
+                                media_items.iter().map(|item| item.id.clone()).collect();
+                            if picked_ids.is_empty() {
+                                log::info!(
+                                    "No media items returned for picking session {}, nothing to sync",
+                                    session_id
+                                );
+                            } else {
+                                let access_token = auth_guard.user.credentials.access_token.clone();
+                                let mut dbclient = match CONNECTION_POOL.get_client() {
+                                    Ok(c) => c,
+                                    Err(e) => {
+                                        log::error!("(handle_manage) DB pool error: {:?}", e);
+                                        respond_json(request, result);
+                                        return;
+                                    }
+                                };
+                                let mut existing_ids = HashSet::new();
+                                match dbclient.query("SELECT item_id FROM album", &[]) {
+                                    Ok(rows) => {
+                                        for row in rows {
+                                            let media_item_id: String = row.get(0);
+                                            existing_ids.insert(media_item_id);
                                         }
                                     }
-                                    CONNECTION_POOL.release_client(dbclient);
-                                    let new_ids: HashSet<_> =
-                                        picked_ids.difference(&existing_ids).cloned().collect();
-                                    if new_ids.is_empty() {
+                                    Err(e) => {
+                                        log::error!("(handle_manage) DB query error: {:?}", e);
+                                        CONNECTION_POOL.release_client(dbclient);
+                                        respond_json(request, result);
+                                        return;
+                                    }
+                                }
+                                CONNECTION_POOL.release_client(dbclient);
+                                let new_ids: HashSet<_> =
+                                    picked_ids.difference(&existing_ids).cloned().collect();
+                                if new_ids.is_empty() {
+                                    log::info!(
+                                        "All {} picked items already exist, skipping sync",
+                                        picked_ids.len()
+                                    );
+                                } else {
+                                    TASK_BOARD.reset();
+                                    let queue = Arc::new(TaskQueue::new());
+                                    let mut task_count = 0;
+                                    for media_item_id in new_ids.iter() {
+                                        if let Some(picked_item) = picked_map.get(media_item_id) {
+                                            let media_item = picked_to_media_item(picked_item);
+                                            queue.push(Task {
+                                                id: TASK_BOARD.add_task(Action::Add),
+                                                data: TaskData::MediaItemWithToken(
+                                                    media_item,
+                                                    access_token.clone(),
+                                                ),
+                                            });
+                                            task_count += 1;
+                                        } else {
+                                            log::warn!(
+                                                "(handle_manage) picked item {} not found in map after filtering",
+                                                media_item_id
+                                            );
+                                        }
+                                    }
+                                    if task_count == 0 {
                                         log::info!(
-                                            "All {} picked items already exist, skipping sync",
-                                            picked_ids.len()
+                                            "No tasks enqueued after filtering picked items for session {}",
+                                            session_id
                                         );
                                     } else {
-                                        TASK_BOARD.reset();
-                                        let queue = Arc::new(TaskQueue::new());
-                                        let mut task_count = 0;
-                                        for media_item_id in new_ids.iter() {
-                                            if let Some(picked_item) = picked_map.get(media_item_id)
-                                            {
-                                                let media_item = picked_to_media_item(picked_item);
-                                                queue.push(Task {
-                                                    id: TASK_BOARD.add_task(Action::Add),
-                                                    data: TaskData::MediaItemWithToken(
-                                                        media_item,
-                                                        access_token.clone(),
-                                                    ),
-                                                });
-                                                task_count += 1;
-                                            } else {
-                                                log::warn!(
-                                                    "(handle_manage) picked item {} not found in map after filtering",
-                                                    media_item_id
-                                                );
-                                            }
-                                        }
-                                        if task_count == 0 {
-                                            log::info!(
-                                                "No tasks enqueued after filtering picked items for session {}",
-                                                session_id
-                                            );
-                                        } else {
-                                            let threads = min(task_count, 4);
-                                            for _ in 0..threads {
-                                                let queue = queue.clone();
-                                                thread::spawn(move || {
-                                                    loop {
-                                                        if queue.is_empty() {
-                                                            log::info!(
-                                                                "(handle_manage) queue is empty, nothing to do"
-                                                            );
-                                                            break;
-                                                        }
-                                                        let task = queue.pop();
-                                                        TASK_BOARD.set_board_data(
-                                                            task.id,
-                                                            Status::InProgress,
+                                        let threads = min(task_count, 4);
+                                        for _ in 0..threads {
+                                            let queue = queue.clone();
+                                            thread::spawn(move || {
+                                                loop {
+                                                    if queue.is_empty() {
+                                                        log::info!(
+                                                            "(handle_manage) queue is empty, nothing to do"
                                                         );
-                                                        let mut dbclient =
-                                                            match CONNECTION_POOL.get_client() {
-                                                                Ok(dbclient) => dbclient,
-                                                                Err(err) => {
-                                                                    log::error!(
-                                                                        "(handle_manage): {err}"
-                                                                    );
-                                                                    TASK_BOARD.set_board_data(
-                                                                        task.id,
-                                                                        Status::Failed,
-                                                                    );
-                                                                    continue;
-                                                                }
-                                                            };
-                                                        let mut success = true;
-                                                        match task.data {
-                                                            TaskData::MediaItemWithToken(
-                                                                media_item,
-                                                                token,
-                                                            ) => {
-                                                                log::info!(
-                                                                    "(handle_manage) retrieving photo"
-                                                                );
-                                                                match get_photo(&media_item, Some(token.as_str()))
+                                                        break;
+                                                    }
+                                                    let task = queue.pop();
+                                                    TASK_BOARD.set_board_data(
+                                                        task.id,
+                                                        Status::InProgress,
+                                                    );
+                                                    let mut dbclient = match CONNECTION_POOL
+                                                        .get_client()
+                                                    {
+                                                        Ok(dbclient) => dbclient,
+                                                        Err(err) => {
+                                                            log::error!("(handle_manage): {err}");
+                                                            TASK_BOARD.set_board_data(
+                                                                task.id,
+                                                                Status::Failed,
+                                                            );
+                                                            continue;
+                                                        }
+                                                    };
+                                                    let mut success = true;
+                                                    match task.data {
+                                                        TaskData::MediaItemWithToken(
+                                                            media_item,
+                                                            token,
+                                                        ) => {
+                                                            log::info!(
+                                                                "(handle_manage) retrieving photo"
+                                                            );
+                                                            match get_photo(&media_item, Some(token.as_str()))
                                                                 .map(|data| {
                                                                     log::info!("(handle_manage) encoding image");
                                                                     encode_image(&data)
@@ -805,50 +811,53 @@ fn handle_manage(mut request: Request, auth_guard: AuthGuard<ValidUser>) {
                                                                     success = false;
                                                                 }
                                                             };
-                                                            }
-                                                            TaskData::String(_) => {
-                                                                log::error!(
-                                                                    "(handle_manage) unexpected remove task in manage flow"
-                                                                );
-                                                                TASK_BOARD.set_board_data(
-                                                                    task.id,
-                                                                    Status::Failed,
-                                                                );
-                                                                success = false;
-                                                            }
                                                         }
-                                                        CONNECTION_POOL.release_client(dbclient);
-                                                        if success {
+                                                        TaskData::String(_) => {
+                                                            log::error!(
+                                                                "(handle_manage) unexpected remove task in manage flow"
+                                                            );
                                                             TASK_BOARD.set_board_data(
                                                                 task.id,
-                                                                Status::Completed,
+                                                                Status::Failed,
                                                             );
+                                                            success = false;
                                                         }
                                                     }
-                                                });
-                                            }
-                                            log::info!(
-                                                "(handle_manage) dispatched {} sync thread(s) for {} new items",
-                                                threads,
-                                                task_count
-                                            );
+                                                    CONNECTION_POOL.release_client(dbclient);
+                                                    if success {
+                                                        TASK_BOARD.set_board_data(
+                                                            task.id,
+                                                            Status::Completed,
+                                                        );
+                                                    }
+                                                }
+                                            });
                                         }
+                                        log::info!(
+                                            "(handle_manage) dispatched {} sync thread(s) for {} new items",
+                                            threads,
+                                            task_count
+                                        );
                                     }
                                 }
-                            } else {
-                                log::error!("Error listing picked media items: {:?}", list.err());
                             }
-
-                            log::info!("Media items set, deleting picking session {}", session_id);
-                            let _ = PickingSession::delete(
-                                &auth_guard.user.credentials.access_token,
-                                &session_id,
-                            );
+                        } else {
+                            log::error!("Error listing picked media items: {:?}", list.err());
                         }
+
+                        log::info!("Media items set, deleting picking session {}", session_id);
+                        let _ = PickingSession::delete(
+                            &auth_guard.user.credentials.access_token,
+                            &session_id,
+                        );
                     }
                     respond_json(request, result);
                 } else {
-                    serve_error(request, tiny_http::StatusCode(400), "Missing picker session id");
+                    serve_error(
+                        request,
+                        tiny_http::StatusCode(400),
+                        "Missing picker session id",
+                    );
                 }
             }
             _ => {
@@ -1147,7 +1156,10 @@ fn handle_image(request: Request, auth_guard: AuthGuard<ValidUser>, params: &Par
 
 /// Load, decode and re-encode an album image. `Ok(None)` means no such image
 /// (or an unusable blob, which is deliberately indistinguishable to a client).
-fn render_image(image_id: &str, is_thumb: bool) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+fn render_image(
+    image_id: &str,
+    is_thumb: bool,
+) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
     let mut dbclient = CONNECTION_POOL.get_client()?;
     let data: Vec<u8> = match dbclient
         .query("SELECT data FROM album WHERE item_id = $1", &[&image_id])?
@@ -1230,7 +1242,10 @@ fn is_cross_site(request: &Request) -> bool {
             "same-origin" | "none"
         );
     }
-    match (header_value(request, "Origin"), header_value(request, "Host")) {
+    match (
+        header_value(request, "Origin"),
+        header_value(request, "Host"),
+    ) {
         (Some(origin), Some(host)) => {
             let origin_host = Url::parse(origin.trim()).ok().and_then(|u| {
                 u.host_str().map(|h| match u.port() {
@@ -1263,7 +1278,14 @@ where
     R: Read,
 {
     let secure = secure_cookies();
-    response.add_header(set_cookie_header(token_cookie_name(), "", "/", -1, secure, "Lax"));
+    response.add_header(set_cookie_header(
+        token_cookie_name(),
+        "",
+        "/",
+        -1,
+        secure,
+        "Lax",
+    ));
     response.add_header(set_cookie_header(
         SESSION_COOKIE,
         "",
@@ -1316,7 +1338,9 @@ fn serve_static_file(request: Request, normalised_path: &str) {
         || file_name.starts_with('/')
         || file_name.contains('\\')
         || file_name.contains('\0')
-        || file_name.split('/').any(|seg| seg == ".." || seg == "." || seg.is_empty())
+        || file_name
+            .split('/')
+            .any(|seg| seg == ".." || seg == "." || seg.is_empty())
     {
         serve_error(request, tiny_http::StatusCode(404), "File not found");
         return;
@@ -1377,7 +1401,7 @@ pub fn serve_error(request: Request, status_code: tiny_http::StatusCode, message
         status_code,
         vec![],
         message.as_bytes(),
-        Some(message.as_bytes().len()),
+        Some(message.len()),
         None,
     );
     dispatch_response(request, response);
@@ -1512,8 +1536,7 @@ where
         .any(|header| header.field.equiv("Cache-Control"))
     {
         response = response.with_header(
-            tiny_http::Header::from_str("Cache-Control: no-store")
-                .expect("This should never fail"),
+            tiny_http::Header::from_str("Cache-Control: no-store").expect("This should never fail"),
         );
     }
     for header in security_headers(nonce) {
@@ -1563,7 +1586,10 @@ mod tests {
             loggable_uri("/frame_admin/oauth/google?state=abc&code=4%2Fsecret"),
             "/frame_admin/oauth/google?<redacted>"
         );
-        assert_eq!(loggable_uri("/frame_admin/album_data?page=2"), "/frame_admin/album_data?page=2");
+        assert_eq!(
+            loggable_uri("/frame_admin/album_data?page=2"),
+            "/frame_admin/album_data?page=2"
+        );
     }
 
     #[test]
