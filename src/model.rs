@@ -1,6 +1,5 @@
 use chrono::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json;
 use std::{
     fs::File,
     io::{BufReader, BufWriter, Write},

@@ -1,18 +1,11 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
+#![allow(clippy::upper_case_acronyms)]
 use core::str;
 use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::io::Read;
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct PhotoAlbum {
-    id: String,
-    title: String,
-    coverPhotoBaseUrl: String,
-    mediaItemsCount: String,
-}
 
 #[derive(Deserialize, Serialize, Eq, Hash, PartialEq, Debug, Clone)]
 pub struct MediaMetadata {
@@ -28,14 +21,6 @@ pub struct MediaItem {
     pub mimeType: String,
     pub mediaMetadata: MediaMetadata,
     pub filename: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub enum VideoProcessingStatus {
-    UNSPECIFIED,
-    PROCESSING,
-    READY,
-    FAILED,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -87,13 +72,6 @@ pub struct PickedMediaItem {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
-pub struct SearchResult<T> {
-    #[serde(alias = "albums", alias = "mediaItems")]
-    result: Vec<T>,
-    nextPageToken: Option<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
 pub struct PickedMediaItemList {
     mediaItems: Vec<PickedMediaItem>,
     nextPageToken: Option<String>,
@@ -125,7 +103,7 @@ impl PickingSession {
         let response = ureq::post("https://photospicker.googleapis.com/v1/sessions")
             .header("Authorization", format!("Bearer {}", access_token).as_str())
             .header("Content-Type", "application/json")
-            .send_json(&json!({}))?;
+            .send_json(json!({}))?;
         Ok(response.into_body().read_json()?)
     }
 
@@ -236,11 +214,7 @@ fn download_image(
     {
         Some(dimage) => dimage,
         None => {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "(get_photo) Failed to dowload image",
-            )
-            .into());
+            return Err(std::io::Error::other("(get_photo) Failed to dowload image").into());
         }
     };
     Ok(dimage)
