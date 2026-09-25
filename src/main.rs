@@ -2,6 +2,7 @@ mod config;
 mod database;
 mod google_oauth;
 mod gphotos_api;
+mod healthcheck;
 mod image_proc;
 mod model;
 mod route_handler;
@@ -12,7 +13,7 @@ mod template_mgr;
 use crate::{
     database::CONNECTION_POOL,
     model::AppState,
-    route_handler::{route_request, serve_error},
+    route_handler::{route_request, serve_error, serve_options},
     session_mgr::SESSION_MGR,
     task_mgr::TASK_BOARD,
     template_mgr::TEMPLATES,
@@ -22,6 +23,11 @@ use std::{process::exit, sync::Arc, thread};
 use tiny_http::Server;
 
 fn main() {
+    // Before anything else: the probe must not load config, touch the database
+    // or rewrite secrets/, which the rest of startup does.
+    if std::env::args().nth(1).as_deref() == Some("--healthcheck") {
+        healthcheck::run();
+    }
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
     #[cfg(debug_assertions)]
     std::panic::set_hook(Box::new(|info| {
@@ -48,7 +54,8 @@ fn main() {
     app_data.save("secrets/");
     // Bind address is configurable so the service can be pinned to localhost
     // when it sits behind a reverse proxy. Defaults to the previous behaviour.
-    let bind_addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:5000".to_string());
+    let bind_addr =
+        std::env::var("BIND_ADDR").unwrap_or_else(|_| healthcheck::DEFAULT_BIND_ADDR.to_string());
     let server = Server::http(bind_addr.as_str())
         .unwrap_or_else(|e| panic!("failed to bind {bind_addr}: {e}"));
     log::info!(
@@ -69,6 +76,10 @@ fn main() {
                     }
                 };
                 let method = request.method().as_str();
+                if method == "OPTIONS" {
+                    serve_options(request);
+                    continue;
+                }
                 if method != "GET" && method != "POST" {
                     serve_error(request, tiny_http::StatusCode(405), "Method not allowed");
                     continue;

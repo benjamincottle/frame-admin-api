@@ -1396,6 +1396,21 @@ fn serve_static_file(request: Request, normalised_path: &str) {
     dispatch_response(request, response);
 }
 
+/// OPTIONS on any path: 204 and the methods served. This is also what
+/// `--healthcheck` probes, and its own requests stay out of the access log.
+pub fn serve_options(request: Request) {
+    let response = Response::empty(204).with_header(
+        tiny_http::Header::from_str("Allow: GET, POST, OPTIONS").expect("This should never fail"),
+    );
+    if crate::healthcheck::is_self_probe(&request) {
+        if let Err(e) = request.respond(response) {
+            log::error!("(serve_options) could not send response: {}", e);
+        }
+        return;
+    }
+    dispatch_response(request, response);
+}
+
 pub fn serve_error(request: Request, status_code: tiny_http::StatusCode, message: &str) {
     let response = Response::new(
         status_code,
