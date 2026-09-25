@@ -22,4 +22,8 @@ COPY --from=builder --chown=65532:65532 /app/secrets/ /app/secrets/
 
 USER 65532:65532
 EXPOSE 5000
+# Exec form: the distroless image has no shell. The binary probes its own
+# listener with an OPTIONS request (see `--healthcheck` in healthcheck.rs).
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD ["/app/admin_api", "--healthcheck"]
 CMD ["./admin_api"]
