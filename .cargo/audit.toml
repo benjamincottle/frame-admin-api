@@ -13,4 +13,12 @@ ignore = [
     # private key to recover. No fixed release exists on the rsa 0.9 line.
     # Revisit when jsonwebtoken moves to an rsa release that closes the advisory.
     "RUSTSEC-2023-0071",
+    # RUSTSEC-2026-0387 timing variability in `crypto-bigint` 0.5.5 (fixed only
+    # in >=0.7.6). It is pulled in solely by jsonwebtoken's rust_crypto feature
+    # via p256/p384 -> elliptic-curve 0.13, i.e. the ES256/ES384 code paths.
+    # This service only validates HS256 and RS256 tokens (src/google_oauth.rs),
+    # so the elliptic-curve arithmetic is compiled in but never executed.
+    # Revisit when jsonwebtoken moves to elliptic-curve 0.14 / crypto-bigint
+    # 0.7, or if ES* algorithms are ever accepted.
+    "RUSTSEC-2026-0387",
 ]
