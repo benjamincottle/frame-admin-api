@@ -3,7 +3,7 @@ use crate::{
     session_mgr::{cookie_value, is_token_revoked, token_cookie_name},
 };
 
-use chrono::Utc;
+use jiff::Timestamp;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
@@ -144,7 +144,7 @@ pub fn request_token(
         return Err(From::from("email not authorised"));
     }
 
-    let current_datetime = Utc::now();
+    let current_datetime = Timestamp::now();
     let expires_in = unix_now() + oauth_creds.expires_in;
     let user_id: String;
     if let Some(user) = user {
@@ -227,7 +227,7 @@ pub fn refresh_token(app_data: &AppState, user: &User) -> Result<OAuthCreds, Box
         .find(|user_to_update| user_to_update.id == user.id)
         .ok_or_else(|| -> Box<dyn Error> { "user no longer exists".into() })?;
     user_to_update.credentials = oauth_creds.clone();
-    user_to_update.updatedAt = Utc::now();
+    user_to_update.updatedAt = Timestamp::now();
     drop(user_db);
     app_data.save("secrets/");
     Ok(oauth_creds)
@@ -258,7 +258,7 @@ pub fn revoke_token(app_data: &AppState, user: &User) -> Result<(), Box<dyn Erro
     user_to_update.credentials.expires_in = 0;
     user_to_update.credentials.refresh_token = None;
     user_to_update.credentials.id_token = None;
-    user_to_update.updatedAt = Utc::now();
+    user_to_update.updatedAt = Timestamp::now();
     drop(user_db);
     app_data.save("secrets/");
     log::info!("(handle_revoke) revoked access/refresh token");
