@@ -1,4 +1,4 @@
-use chrono::{Duration, Utc};
+use jiff::{SignedDuration, Timestamp, ZonedDateTime};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -284,13 +284,13 @@ fn handle_oauth_google(app_data: AppState, request: Request) {
             return;
         }
     };
-    let current_datetime = Utc::now();
+    let current_datetime = Timestamp::now();
     let env = app_data.env.lock().unwrap_or_else(|e| e.into_inner());
     let jwt_secret = env.jwt_secret.to_owned();
     let jwt_max_age = env.jwt_max_age;
     drop(env);
-    let iat = current_datetime.timestamp() as usize;
-    let exp = (current_datetime + Duration::seconds(jwt_max_age)).timestamp() as usize;
+    let iat = current_datetime.as_second() as usize;
+    let exp = (current_datetime + SignedDuration::from_secs(jwt_max_age)).as_second() as usize;
     let claims = TokenClaims {
         sub: user_id,
         exp,
@@ -969,8 +969,9 @@ fn handle_album_data(request: Request, auth_guard: AuthGuard<ValidUser>) {
         let id: String = row.get(0);
         let ts_secs: i64 = row.get(1);
         let portrait: bool = row.get(2);
-        let ts_iso =
-            chrono::DateTime::<chrono::Utc>::from_timestamp(ts_secs, 0).map(|dt| dt.to_rfc3339());
+        let ts_iso = Timestamp::from_second(ts_secs)
+            .ok()
+            .map(|dt| dt.to_string());
         // Percent-encode the id in the URL we hand back; ids come from the
         // database and must never be able to change the path they land on.
         let encoded_id: String = url::form_urlencoded::byte_serialize(id.as_bytes()).collect();
@@ -1448,7 +1449,7 @@ pub fn log_request(request: &tiny_http::Request, status: u16, size: usize) {
         .remote_addr()
         .unwrap_or(&SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0))
         .ip();
-    let date_time = chrono::Local::now().format("%d/%b/%Y:%H:%M:%S %z");
+    let date_time = ZonedDateTime::now().strftime("%d/%b/%Y:%H:%M:%S %z");
     let method = request.method();
     let uri = loggable_uri(request.url());
     let protocol = request.http_version();

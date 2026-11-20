@@ -1,4 +1,4 @@
-use chrono::prelude::*;
+use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -82,8 +82,8 @@ pub struct User {
     pub email: String,
     pub credentials: OAuthCreds,
     pub verified: bool,
-    pub createdAt: DateTime<Utc>,
-    pub updatedAt: DateTime<Utc>,
+    pub createdAt: Timestamp,
+    pub updatedAt: Timestamp,
 }
 
 /// Claims carried by the app's own HS256 session token.
