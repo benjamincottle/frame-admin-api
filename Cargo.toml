@@ -18,7 +18,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 tera = { version = "2.4.0", features = ["glob_fs"] }
 tiny_http = "0.12.0"
 ureq = { version = "3.4.2", features = ["json"] }
-url = "2.5.8"
+url = "2.5.9"
 serde_json = "1.0.151"
 sha2 = "0.11.0"
 base64 = "0.23.1"
